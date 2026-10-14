@@ -216,7 +216,11 @@ class HomeScreen : public UIScreen {
 #if AUTO_OFF_MILLIS > 0
       next_sensors_refresh = millis() + 5000; // refresh sensor values every 5 sec
 #else
+#if defined(NM_EPD_420_BW)
+      next_sensors_refresh = millis() + 600000; // refresh sensor values every 10 min (600s)
+#else
       next_sensors_refresh = millis() + 60000; // refresh sensor values every 1 min
+#endif
 #endif
     }
   }
@@ -327,25 +331,88 @@ public:
         display.print(tmp);
       }
     } else if (_page == HomePage::RADIO) {
-      const int dy = NM_DY(20, 64);
       display.setColor(UIColor::primary_txt);
       display.setTextSize(1);
       // freq / sf
-      display.setCursor(0, 20 + dy);
+      display.setCursor(0, 20);
       sprintf(tmp, "FQ: %06.3f   SF: %d", _node_prefs->freq, _node_prefs->sf);
       display.print(tmp);
 
-      display.setCursor(0, 31 + dy);
+      display.setCursor(0, 31);
       sprintf(tmp, "BW: %03.2f     CR: %d", _node_prefs->bw, _node_prefs->cr);
       display.print(tmp);
 
       // tx power,  noise floor
-      display.setCursor(0, 42 + dy);
+      display.setCursor(0, 42);
       sprintf(tmp, "TX: %ddBm", _node_prefs->tx_power_dbm);
       display.print(tmp);
-      display.setCursor(0, 53 + dy);
+      display.setCursor(0, 53);
       sprintf(tmp, "Noise floor: %d", radio_driver.getNoiseFloor());
       display.print(tmp);
+
+#if defined(NM_EPD_420_BW)
+      // Horizontal separator line between Radio and Sensors
+      display.setColor(UIColor::secondary_txt);
+      display.drawRect(0, 67, display.width(), 1);
+
+      // Render available onboard sensors from CayenneLPP
+      int y = 74;
+      char buf[32];
+      char name[24];
+      LPPReader r(sensors_lpp.getBuffer(), sensors_lpp.getSize());
+      uint8_t channel, type;
+      bool has_sensors = false;
+
+      while (r.readHeader(channel, type)) {
+        float v;
+        switch (type) {
+          case LPP_VOLTAGE:
+            r.readVoltage(v);
+            strcpy(name, "Voltage:");
+            snprintf(buf, sizeof(buf), "%.2fV (%d%%)", v,
+                     NMEPD420Board::estimateLipoPercentage((uint16_t)(v * 1000.0f)));
+            break;
+          case LPP_TEMPERATURE:
+            r.readTemperature(v);
+            strcpy(name, "Temperature:");
+            snprintf(buf, sizeof(buf), "%.1f C", v);
+            break;
+          case LPP_RELATIVE_HUMIDITY:
+            r.readRelativeHumidity(v);
+            strcpy(name, "Humidity:");
+            snprintf(buf, sizeof(buf), "%.0f %% RH", v);
+            break;
+          case LPP_BAROMETRIC_PRESSURE:
+            r.readPressure(v);
+            strcpy(name, "Pressure:");
+            snprintf(buf, sizeof(buf), "%.1f hPa", v);
+            break;
+          case LPP_ALTITUDE:
+            r.readAltitude(v);
+            strcpy(name, "Altitude:");
+            snprintf(buf, sizeof(buf), "%.0f m", v);
+            break;
+          default:
+            r.skipData(type);
+            continue;
+        }
+
+        has_sensors = true;
+        display.setCursor(0, y);
+        display.setColor(UIColor::secondary_txt);
+        display.print(name);
+        display.setColor(UIColor::primary_txt);
+        display.setCursor(display.width() - display.getTextWidth(buf) - 1, y);
+        display.print(buf);
+        y += 14;
+      }
+
+      if (!has_sensors) {
+        display.setCursor(0, y);
+        display.setColor(UIColor::secondary_txt);
+        display.print("No sensors detected");
+      }
+#endif
     } else if (_page == HomePage::BLUETOOTH) {
       const int dy = NM_DY(18, 67);
       display.setColor(UIColor::corp_blue);
@@ -534,6 +601,11 @@ public:
       } else {
         _task->showAlert("Advert failed..", 1000);
       }
+      return true;
+    }
+    if (c == KEY_ENTER && _page == HomePage::RADIO) {
+      next_sensors_refresh = 0;
+      _task->showAlert("Sensors refreshed", 800);
       return true;
     }
 #if ENV_INCLUDE_GPS == 1
