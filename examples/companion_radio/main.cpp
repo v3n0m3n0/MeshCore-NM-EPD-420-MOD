@@ -19,7 +19,7 @@ MultiSerialInterface interface_manager;
 // include bluetooth interface
 #if defined(BLE_PIN_CODE)
   #ifdef ESP32
-    #include "esp_gap_ble_api.h"
+    #include "nvs_flash.h"
     // include esp32 bluetooth interface
     #include <helpers/esp32/SerialBLEInterface.h>
     SerialBLEInterface bluetooth_interface;
@@ -182,18 +182,8 @@ void setup() {
       delay(50);
     }
     if (millis() - press_start >= 5000) {
-      int dev_num = esp_ble_get_bond_device_num();
-      if (dev_num > 0) {
-        esp_ble_bond_dev_t *dev_list = (esp_ble_bond_dev_t *)malloc(sizeof(esp_ble_bond_dev_t) * dev_num);
-        if (dev_list) {
-          if (esp_ble_get_bond_device_list(&dev_num, dev_list) == ESP_OK) {
-            for (int i = 0; i < dev_num; i++) {
-              esp_ble_remove_bond_device(dev_list[i].bd_addr);
-            }
-          }
-          free(dev_list);
-        }
-      }
+      nvs_flash_erase();
+      nvs_flash_init();
       store.formatFileSystem();
       delay(1000);
       board.reboot();

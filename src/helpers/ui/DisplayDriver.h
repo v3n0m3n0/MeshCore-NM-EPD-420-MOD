@@ -59,6 +59,7 @@ public:
       return;
     }
 
+#if defined(NM_EPD_420_BW)
     size_t j = 0;
     for (size_t i = 0; src[i] != '\0' && j < dest_size - 1; i++) {
       unsigned char c = (unsigned char)src[i];
@@ -69,8 +70,8 @@ public:
           dest[j++] = c;
         }
       } else if (c == 0xC3) {
+        if (!src[i+1]) break;
         unsigned char c2 = (unsigned char)src[++i];
-        if (!c2) break;
         switch (c2) {
           case 0x93: dest[j++] = 'O'; break; // Ó
           case 0xB3: dest[j++] = 'o'; break; // ó
@@ -92,12 +93,15 @@ public:
           case 0xB9: case 0xBA: case 0xBB: case 0xBC: dest[j++] = 'u'; break; // ù-ü
           case 0x9D: dest[j++] = 'Y'; break; // Ý
           case 0xBD: case 0xBF: dest[j++] = 'y'; break; // ý,ÿ
-          case 0x9F: dest[j++] = 's'; break; // ß
+          case 0x9F:
+            dest[j++] = 's';
+            if (j < dest_size - 1) dest[j++] = 's';
+            break; // ß -> ss
           default: dest[j++] = '?'; break;
         }
       } else if (c == 0xC4) {
+        if (!src[i+1]) break;
         unsigned char c2 = (unsigned char)src[++i];
-        if (!c2) break;
         switch (c2) {
           case 0x84: dest[j++] = 'A'; break; // Ą
           case 0x85: dest[j++] = 'a'; break; // ą
@@ -114,8 +118,8 @@ public:
           default: dest[j++] = '?'; break;
         }
       } else if (c == 0xC5) {
+        if (!src[i+1]) break;
         unsigned char c2 = (unsigned char)src[++i];
-        if (!c2) break;
         switch (c2) {
           case 0x81: dest[j++] = 'L'; break; // Ł
           case 0x82: dest[j++] = 'l'; break; // ł
@@ -140,8 +144,10 @@ public:
           default: dest[j++] = '?'; break;
         }
       } else if (c == 0xE2) {
+        if (!src[i+1]) break;
         unsigned char c2 = (unsigned char)src[++i];
-        unsigned char c3 = c2 ? (unsigned char)src[++i] : 0;
+        if (!src[i+1]) break;
+        unsigned char c3 = (unsigned char)src[++i];
         if (c2 == 0x80) {
           switch (c3) {
             case 0x98: case 0x99: case 0x9A: dest[j++] = '\''; break; // ‘ ’ ‚
@@ -161,6 +167,20 @@ public:
       }
     }
     dest[j] = '\0';
+#else
+    size_t j = 0;
+    for (size_t i = 0; src[i] != 0 && j < dest_size - 1; i++) {
+      unsigned char c = (unsigned char)src[i];
+      if (c >= 32 && c <= 126) {
+        dest[j++] = c;  // ASCII printable
+      } else if (c >= 0x80) {
+        dest[j++] = '\xDB';  // CP437 full block █
+        while (src[i+1] && (src[i+1] & 0xC0) == 0x80) 
+          i++;  // skip UTF-8 continuation bytes
+      }
+    }
+    dest[j] = 0;
+#endif
   }
   
   // draw text with ellipsis if it exceeds max_width

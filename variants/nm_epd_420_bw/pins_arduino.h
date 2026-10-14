@@ -3,8 +3,9 @@
 
 #include <stdint.h>
 
-static const uint8_t TX = 43;
-static const uint8_t RX = 44;
+// Native USB-CDC is used for serial console.
+// Note: GPIO 43 is dedicated to ADC_EN (battery divider gate) and GPIO 44 to CODEC_EN (audio power gate).
+// TX and RX are not exposed on GPIO 43/44 to prevent accidental hardware pin reconfiguration.
 
 // I²C (AHT20 + ES8311 codec share this bus)
 static const uint8_t SDA = 39;

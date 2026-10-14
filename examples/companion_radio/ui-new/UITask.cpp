@@ -772,8 +772,10 @@ void UITask::loop() {
   }
 
   int ev = user_btn.check();
-  if (ev == BUTTON_EVENT_CLICK) {
+  if (c == 0 && ev == BUTTON_EVENT_CLICK) {
     c = checkDisplayOn(KEY_PREV);
+  } else if (c == 0 && ev == BUTTON_EVENT_LONG_PRESS) {
+    c = handleLongPress(KEY_PREV);
   } 
 #elif defined(PIN_USER_BTN)
   int ev = user_btn.check();

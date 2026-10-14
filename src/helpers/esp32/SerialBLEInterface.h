@@ -74,7 +74,7 @@ public:
    * @param pin_code   the BLE security pin
    */
   void begin(const char* prefix, char* name, uint32_t pin_code);
-  void clearAllBonds();
+  static void clearAllBonds();
 
   // BaseSerialInterface methods
   void enable() override;

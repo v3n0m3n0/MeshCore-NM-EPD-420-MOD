@@ -37,7 +37,10 @@ void NMEPD420Display::turnOn() {
 }
 
 void NMEPD420Display::turnOff() {
-  _isOn = false;
+  if (_isOn) {
+    display.powerOff();
+    _isOn = false;
+  }
 }
 
 void NMEPD420Display::clear() {
@@ -236,7 +239,7 @@ void NMEPD420Display::drawXbm(int x, int y, const uint8_t* bits, int w, int h) {
 
 uint16_t NMEPD420Display::getTextWidth(const char* str) {
   if (!str || !*str) return 0;
-  char buf[256];
+  char buf[512];
   bool has_utf8 = false;
   for (const char* p = str; *p; p++) {
     if ((unsigned char)*p >= 0x80) { has_utf8 = true; break; }

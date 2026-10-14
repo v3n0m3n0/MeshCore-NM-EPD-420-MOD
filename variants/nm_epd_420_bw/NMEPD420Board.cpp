@@ -4,8 +4,15 @@
 void NMEPD420Board::begin() {
   ESP32Board::begin();
 
-  // Deinit task watchdog to avoid triggers during long blocking E-Paper refreshes (~2.2s)
-  esp_task_wdt_deinit();
+  // Reconfigure task watchdog to 15s to allow blocking E-Paper refreshes (~2.2s) without losing deadlock protection
+  esp_task_wdt_config_t twdt_config = {
+      .timeout_ms = 15000,
+      .idle_core_mask = 0,
+      .trigger_panic = true,
+  };
+  if (esp_task_wdt_reconfigure(&twdt_config) != ESP_OK) {
+    esp_task_wdt_init(&twdt_config);
+  }
 
   #ifdef SX126X_POWER_EN
   pinMode(SX126X_POWER_EN, OUTPUT);
