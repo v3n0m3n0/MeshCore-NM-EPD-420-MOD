@@ -1,5 +1,6 @@
 #include "NMEPD420Board.h"
 #include <esp_task_wdt.h>
+#include <target.h>
 
 void NMEPD420Board::begin() {
   ESP32Board::begin();
@@ -42,12 +43,22 @@ void NMEPD420Board::begin() {
 
   esp_reset_reason_t reason = esp_reset_reason();
   if (reason == ESP_RST_DEEPSLEEP) {
-    long wakeup_source = esp_sleep_get_ext1_wakeup_status();
-    if (wakeup_source & (1L << P_LORA_DIO_1)) {
-      startup_reason = BD_STARTUP_RX_PACKET;
+    esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+    if (cause == ESP_SLEEP_WAKEUP_EXT0) {
+      startup_reason = BD_STARTUP_NORMAL; // Woken up by BOOT button press
+    } else if (cause == ESP_SLEEP_WAKEUP_EXT1) {
+      uint64_t wakeup_source = esp_sleep_get_ext1_wakeup_status();
+      if (wakeup_source & (1ULL << P_LORA_DIO_1)) {
+        startup_reason = BD_STARTUP_RX_PACKET;
+      }
     }
     rtc_gpio_hold_dis((gpio_num_t)P_LORA_NSS);
+    #ifdef P_LORA_DIO_1
     rtc_gpio_deinit((gpio_num_t)P_LORA_DIO_1);
+    #endif
+    #ifdef PIN_BOOT_BTN
+    rtc_gpio_deinit((gpio_num_t)PIN_BOOT_BTN);
+    #endif
   }
 }
 
@@ -118,4 +129,82 @@ uint8_t NMEPD420Board::estimateLipoPercentage(uint16_t milliVolts) {
 
 const char* NMEPD420Board::getManufacturerName() const {
   return "RockBase IoT NM-EPD-420-BW";
+}
+
+void NMEPD420Board::powerOff() {
+  enterDeepSleep(0);
+}
+
+void NMEPD420Board::sleep(uint32_t secs) {
+  enterDeepSleep(secs);
+}
+
+void NMEPD420Board::enterDeepSleep(uint32_t secs) {
+  // 1. Power off board peripherals and sensors to eliminate idle current leakage
+  #ifdef AHTX0_POWER_PIN
+  digitalWrite(AHTX0_POWER_PIN, LOW);
+  #endif
+
+  #ifdef PIN_ADC_CTRL
+  digitalWrite(PIN_ADC_CTRL, LOW);
+  #endif
+
+  #ifdef PIN_AMP_ENABLE
+  digitalWrite(PIN_AMP_ENABLE, LOW);
+  #endif
+
+  #ifdef PIN_ES8311_POWER
+  digitalWrite(PIN_ES8311_POWER, LOW);
+  #endif
+
+  // 2. Shut down E-Paper display (bistable panel holds image indefinitely with 0 power)
+  #ifdef DISPLAY_CLASS
+  display.turnOff();
+  #endif
+
+  // 3. Power off LoRa modem, latch NSS HIGH via RTC hold
+  radio_driver.powerOff();
+  digitalWrite(P_LORA_NSS, HIGH);
+  rtc_gpio_hold_en((gpio_num_t)P_LORA_NSS);
+
+  // 4. Power off GPS if active
+  if (sensors.getLocationProvider() != NULL) {
+    sensors.getLocationProvider()->stop();
+  }
+
+  // 5. Flush serial buffers
+  Serial.flush();
+  delay(50);
+
+  // 6. Clear stale wakeup sources
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+
+  // 7. Enable RTC peripheral power domain so ext0 / ext1 wakeups trigger
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+
+  // 8. Configure Hardware Button Wakeup on PIN_BOOT_BTN (GPIO 0):
+  // BOOT button is pulled HIGH externally; pressing pulls it LOW (0).
+  #ifdef PIN_BOOT_BTN
+  rtc_gpio_init((gpio_num_t)PIN_BOOT_BTN);
+  rtc_gpio_set_direction((gpio_num_t)PIN_BOOT_BTN, RTC_GPIO_MODE_INPUT_ONLY);
+  rtc_gpio_pullup_en((gpio_num_t)PIN_BOOT_BTN);
+  rtc_gpio_pulldown_dis((gpio_num_t)PIN_BOOT_BTN);
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_BOOT_BTN, 0); // Active LOW
+  #endif
+
+  // 9. Configure LoRa Packet Wakeup on DIO1 (GPIO 14):
+  #ifdef P_LORA_DIO_1
+  rtc_gpio_init((gpio_num_t)P_LORA_DIO_1);
+  rtc_gpio_set_direction((gpio_num_t)P_LORA_DIO_1, RTC_GPIO_MODE_INPUT_ONLY);
+  rtc_gpio_pulldown_en((gpio_num_t)P_LORA_DIO_1);
+  esp_sleep_enable_ext1_wakeup((1ULL << P_LORA_DIO_1), ESP_EXT1_WAKEUP_ANY_HIGH);
+  #endif
+
+  // 10. Configure Timer Wakeup if requested
+  if (secs > 0) {
+    esp_sleep_enable_timer_wakeup((uint64_t)secs * 1000000ULL);
+  }
+
+  // 11. Enter deep sleep (CPU halts here and never returns)
+  esp_deep_sleep_start();
 }

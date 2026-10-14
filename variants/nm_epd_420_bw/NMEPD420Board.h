@@ -9,4 +9,8 @@ public:
   uint16_t getBattMilliVolts() override;
   static uint8_t estimateLipoPercentage(uint16_t milliVolts);
   const char* getManufacturerName() const override;
+
+  void powerOff() override;
+  void sleep(uint32_t secs) override;
+  void enterDeepSleep(uint32_t secs);
 };

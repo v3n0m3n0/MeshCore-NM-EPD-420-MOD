@@ -464,10 +464,17 @@ public:
       if (_shutdown_init) {
         display.setColor(UIColor::warning_txt);
         display.drawTextCentered(display.width() / 2, 34, "hibernating...");
+#if defined(NM_EPD_420_BW)
+        display.setColor(UIColor::secondary_txt);
+        display.drawTextCentered(display.width() / 2, 50, "Press BOOT to wake");
+#endif
       } else {
         display.setColor(UIColor::secondary_txt);
         display.drawXbm((display.width() - 32) / 2, 18, power_icon, 32, 32);
         display.drawTextCentered(display.width() / 2, 56, "hibernate: " PRESS_LABEL);
+#if defined(NM_EPD_420_BW)
+        display.drawTextCentered(display.width() / 2, 70, "Wake: Press BOOT");
+#endif
       }
     }
     return 5000;   // next render after 5000 ms
