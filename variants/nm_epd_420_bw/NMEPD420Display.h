@@ -13,9 +13,11 @@
 #include <helpers/ui/DisplayDriver.h>
 
 class NMEPD420Display : public DisplayDriver {
-  static constexpr int X_OFFSET = 36;
-  static constexpr int Y_OFFSET = 16;
-  static constexpr uint8_t PARTIAL_REFRESH_LIMIT = 10;
+  static constexpr int X_OFFSET = 0;
+  static constexpr int Y_OFFSET = 0;
+  static constexpr uint8_t PARTIAL_REFRESH_LIMIT = 30;
+  static constexpr int LOGICAL_WIDTH = 200;
+  static constexpr int LOGICAL_HEIGHT = 150;
 
   GxEPD2_BW<EINK_DISPLAY_MODEL, EINK_DISPLAY_MODEL::HEIGHT> display;
   bool _init = false;

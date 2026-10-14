@@ -7,7 +7,7 @@
 static SPIClass nm_epd_spi(FSPI);
 
 NMEPD420Display::NMEPD420Display()
-  : DisplayDriver(128, 128),
+  : DisplayDriver(LOGICAL_WIDTH, LOGICAL_HEIGHT),
     display(EINK_DISPLAY_MODEL(PIN_DISPLAY_CS, PIN_DISPLAY_DC, PIN_DISPLAY_RST, PIN_DISPLAY_BUSY)) {}
 
 bool NMEPD420Display::begin() {
@@ -267,6 +267,10 @@ void NMEPD420Display::endFrame() {
     display.display(true);
     partial_refresh_count++;
   }
+
+  // Energy saving: power off the SSD1683 booster/charge pumps immediately after refresh.
+  // The bistable E-Paper holds the image indefinitely with zero power draw.
+  display.powerOff();
 
   last_display_crc_value = crc;
 }
