@@ -67,6 +67,15 @@ Every package in this build has been thoroughly compiled with merge-bin and veri
   * `Humidity:` Relative humidity (`%.0f %% RH`).
 * **10-Minute Sampling Interval (600s):** Sensors are queried once every 10 minutes, with immediate on-demand refresh triggered by pressing `Enter` on the Radio page.
 
+### 9. UNREAD Screen Latency Elimination & Button Responsiveness
+* **Elimination of 1 Hz Refresh Storm:** Fixed an issue where second-by-second timestamp increments (`%ds`) invalidated the display CRC every second on `MsgPreviewScreen`, causing the SSD1683 e-paper to execute non-stop, 100% blocking 1.5s refresh cycles that dropped button presses.
+* **E-Paper Friendly Timestamp:** Messages under 60 seconds now display static `"now"` (applied to both UNREAD and RECENT screens), eliminating redundant screen redraws and keeping the CPU loop 100% responsive.
+* **Extended Render Interval:** Configured e-paper render return interval to 60s (`AUTO_OFF_MILLIS=0`), waking immediately only when a new message arrives.
+* **Unified Dual-Button Navigation:**
+  * `BOOT` single-click (`KEY_NEXT`): Steps through unread messages; returns to Home on the last message.
+  * `BOOT` double-click (`KEY_SELECT`) / long-press (`KEY_ENTER`): Instantly clears unread queue and returns to Home.
+  * `USER` click (`KEY_PREV`): Instantly dismisses unread queue and returns to Home.
+
 ---
 
 ## Hardware Pinout Reference

@@ -313,6 +313,15 @@ public:
         auto a = &recent[i];
         if (a->name[0] == 0) continue;  // empty slot
         int secs = _rtc->getCurrentTime() - a->recv_timestamp;
+#if defined(NM_EPD_420_BW)
+        if (secs < 60) {
+          strcpy(tmp, "now");
+        } else if (secs < 60*60) {
+          sprintf(tmp, "%dm", secs / 60);
+        } else {
+          sprintf(tmp, "%dh", secs / (60*60));
+        }
+#else
         if (secs < 60) {
           sprintf(tmp, "%ds", secs);
         } else if (secs < 60*60) {
@@ -320,6 +329,7 @@ public:
         } else {
           sprintf(tmp, "%dh", secs / (60*60));
         }
+#endif
 
         int timestamp_width = display.getTextWidth(tmp);
         int max_name_width = display.width() - timestamp_width - 1;
@@ -696,6 +706,15 @@ public:
     auto p = &unread[head];
 
     int secs = _rtc->getCurrentTime() - p->timestamp;
+#if defined(NM_EPD_420_BW)
+    if (secs < 60) {
+      strcpy(tmp, "now");
+    } else if (secs < 60*60) {
+      sprintf(tmp, "%dm", secs / 60);
+    } else {
+      sprintf(tmp, "%dh", secs / (60*60));
+    }
+#else
     if (secs < 60) {
       sprintf(tmp, "%ds", secs);
     } else if (secs < 60*60) {
@@ -703,6 +722,7 @@ public:
     } else {
       sprintf(tmp, "%dh", secs / (60*60));
     }
+#endif
     display.setCursor(display.width() - display.getTextWidth(tmp) - 2, 0);
     display.print(tmp);
 
@@ -720,8 +740,8 @@ public:
     display.translateUTF8ToBlocks(filtered_msg, p->msg, sizeof(filtered_msg));
     display.printWordWrap(filtered_msg, display.width());
 
-#if AUTO_OFF_MILLIS==0 // probably e-ink
-    return 10000; // 10 s
+#if defined(NM_EPD_420_BW) || AUTO_OFF_MILLIS==0 // e-ink display
+    return 60000; // 60 s (refresh only when minutes change or on user interaction)
 #else
     return 1000;  // next render after 1000 ms
 #endif
@@ -731,12 +751,14 @@ public:
     if (c == KEY_NEXT || c == KEY_RIGHT) {
       head = (head + MAX_UNREAD_MSGS - 1) % MAX_UNREAD_MSGS;
       num_unread--;
-      if (num_unread == 0) {
+      if (num_unread <= 0) {
+        num_unread = 0;
         _task->gotoHomeScreen();
       }
       return true;
     }
-    if (c == KEY_ENTER) {
+    // USER button (KEY_PREV / KEY_LEFT) or Double-Click / Long-Press BOOT (KEY_SELECT / KEY_ENTER): Dismiss immediately
+    if (c == KEY_PREV || c == KEY_LEFT || c == KEY_SELECT || c == KEY_ENTER) {
       num_unread = 0;  // clear unread queue
       _task->gotoHomeScreen();
       return true;
