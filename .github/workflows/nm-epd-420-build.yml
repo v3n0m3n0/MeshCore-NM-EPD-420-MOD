@@ -1,0 +1,45 @@
+name: Build RockBase NM-EPD-420-BW
+
+on:
+  push:
+    branches: [nm-epd-420-bw]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [nm-epd-420-bw]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-nm-epd-420:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Build Environment
+        uses: ./.github/actions/setup-build-environment
+
+      - name: Fix esptool click compatibility
+        run: |
+          pip install "click<8.2.0"
+
+      - name: Build Merged Firmware
+        run: |
+          pio run -e NM_EPD_420_BW_companion_radio_ble -t mergebin
+
+      - name: Generate Checksums
+        run: |
+          cd .pio/build/NM_EPD_420_BW_companion_radio_ble
+          sha256sum firmware-merged.bin > firmware-merged.bin.sha256
+          cat firmware-merged.bin.sha256
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nm-epd-420-bw-firmware
+          path: |
+            .pio/build/NM_EPD_420_BW_companion_radio_ble/firmware-merged.bin
+            .pio/build/NM_EPD_420_BW_companion_radio_ble/firmware-merged.bin.sha256
