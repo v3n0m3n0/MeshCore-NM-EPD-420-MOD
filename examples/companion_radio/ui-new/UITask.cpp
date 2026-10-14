@@ -31,6 +31,21 @@
 
 #include "icons.h"
 
+#if defined(NM_EPD_420_BW)
+// Vertically center a content block [top..bottom] (logical units) in the zone between
+// zone_top and the bottom of the canvas. Page content was laid out for 128x64 OLED;
+// on the native 200x150 canvas it would otherwise hug the top edge.
+static inline int nmCenterDy(const DisplayDriver& d, int top, int bottom, int zone_top) {
+  int dy = ((zone_top + d.height()) - (top + bottom)) / 2;
+  return dy > 0 ? dy : 0;
+}
+#define NM_DY(top, bottom)       nmCenterDy(display, (top), (bottom), 18)  // below page dots
+#define NM_DY_FULL(top, bottom)  nmCenterDy(display, (top), (bottom), 0)   // whole screen
+#else
+#define NM_DY(top, bottom)       0
+#define NM_DY_FULL(top, bottom)  0
+#endif
+
 class SplashScreen : public UIScreen {
   UITask* _task;
   unsigned long dismiss_after;
@@ -52,27 +67,28 @@ public:
   }
 
   int render(DisplayDriver& display) override {
+    const int dy = NM_DY_FULL(3, 59);
     // meshcore logo
     display.setColor(UIColor::corp_blue);
     int logoWidth = 128;
-    display.drawXbm((display.width() - logoWidth) / 2, 3, meshcore_logo, logoWidth, 13);
+    display.drawXbm((display.width() - logoWidth) / 2, 3 + dy, meshcore_logo, logoWidth, 13);
 
     // meshcore website
     const char* website = "https://meshcore.io";
     display.setColor(UIColor::primary_txt);
     display.setTextSize(1);
     uint16_t websiteWidth = display.getTextWidth(website);
-    display.setCursor((display.width() - websiteWidth) / 2, 22);
+    display.setCursor((display.width() - websiteWidth) / 2, 22 + dy);
     display.print(website);
 
     // version info
     display.setColor(UIColor::primary_txt);
     display.setTextSize(1);
-    display.drawTextCentered(display.width()/2, 35, _version_info);
+    display.drawTextCentered(display.width()/2, 35 + dy, _version_info);
 
     display.setColor(UIColor::secondary_txt);
     display.setTextSize(1);
-    display.drawTextCentered(display.width()/2, 48, FIRMWARE_BUILD_DATE);
+    display.drawTextCentered(display.width()/2, 48 + dy, FIRMWARE_BUILD_DATE);
 
     return 1000;
   }
@@ -250,40 +266,46 @@ public:
     }
 
     if (_page == HomePage::FIRST) {
+      const int dy = NM_DY(26, 85);
       display.setColor(UIColor::primary_txt);
       display.setTextSize(2);
       sprintf(tmp, "MSG: %d", _task->getMsgCount());
-      display.drawTextCentered(display.width() / 2, 26, tmp);
+      display.drawTextCentered(display.width() / 2, 26 + dy, tmp);
 
       if (_task->hasConnection()) {
         display.setColor(UIColor::warning_txt);
         display.setTextSize(1);
-        display.drawTextCentered(display.width() / 2, 50, "< Connected >");
+        display.drawTextCentered(display.width() / 2, 50 + dy, "< Connected >");
       } else if (the_mesh.getBLEPin() != 0) { // BT pin
         display.setColor(UIColor::warning_txt);
         display.setTextSize(2);
         sprintf(tmp, "Pin:%d", the_mesh.getBLEPin());
-        display.drawTextCentered(display.width() / 2, 50, tmp);
+        display.drawTextCentered(display.width() / 2, 50 + dy, tmp);
       }
 
       if (has_env_data) {
         display.setColor(UIColor::secondary_txt);
         display.setTextSize(1);
         snprintf(tmp, sizeof(tmp), "%.1f C  |  %.0f%% RH", last_temp, last_hum);
-        display.drawTextCentered(display.width() / 2, 74, tmp);
+        display.drawTextCentered(display.width() / 2, 74 + dy, tmp);
       }
 
       #ifdef WIFI_SSID
         IPAddress ip = WiFi.localIP();
         snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
         display.setTextSize(1);
-        display.drawTextCentered(display.width() / 2, 96, tmp);
+        display.drawTextCentered(display.width() / 2, 96 + dy, tmp);
       #endif
     } else if (_page == HomePage::RECENT) {
       the_mesh.getRecentlyHeard(recent, UI_RECENT_LIST_SIZE);
       display.setColor(UIColor::primary_txt);
+#if defined(NM_EPD_420_BW)
+      const int row_step = 14;  // spread the list over the full 400x300 panel height
+#else
+      const int row_step = 11;
+#endif
       int y = 20;
-      for (int i = 0; i < UI_RECENT_LIST_SIZE; i++, y += 11) {
+      for (int i = 0; i < UI_RECENT_LIST_SIZE; i++, y += row_step) {
         auto a = &recent[i];
         if (a->name[0] == 0) continue;  // empty slot
         int secs = _rtc->getCurrentTime() - a->recv_timestamp;
@@ -305,37 +327,40 @@ public:
         display.print(tmp);
       }
     } else if (_page == HomePage::RADIO) {
+      const int dy = NM_DY(20, 64);
       display.setColor(UIColor::primary_txt);
       display.setTextSize(1);
       // freq / sf
-      display.setCursor(0, 20);
+      display.setCursor(0, 20 + dy);
       sprintf(tmp, "FQ: %06.3f   SF: %d", _node_prefs->freq, _node_prefs->sf);
       display.print(tmp);
 
-      display.setCursor(0, 31);
+      display.setCursor(0, 31 + dy);
       sprintf(tmp, "BW: %03.2f     CR: %d", _node_prefs->bw, _node_prefs->cr);
       display.print(tmp);
 
       // tx power,  noise floor
-      display.setCursor(0, 42);
+      display.setCursor(0, 42 + dy);
       sprintf(tmp, "TX: %ddBm", _node_prefs->tx_power_dbm);
       display.print(tmp);
-      display.setCursor(0, 53);
+      display.setCursor(0, 53 + dy);
       sprintf(tmp, "Noise floor: %d", radio_driver.getNoiseFloor());
       display.print(tmp);
     } else if (_page == HomePage::BLUETOOTH) {
+      const int dy = NM_DY(18, 67);
       display.setColor(UIColor::corp_blue);
-      display.drawXbm((display.width() - 32) / 2, 18,
+      display.drawXbm((display.width() - 32) / 2, 18 + dy,
           _task->isBluetoothEnabled() ? bluetooth_on : bluetooth_off,
           32, 32);
       display.setColor(UIColor::secondary_txt);
       display.setTextSize(1);
-      display.drawTextCentered(display.width() / 2, 56, "toggle: " PRESS_LABEL);
+      display.drawTextCentered(display.width() / 2, 56 + dy, "toggle: " PRESS_LABEL);
     } else if (_page == HomePage::ADVERT) {
+      const int dy = NM_DY(18, 67);
       display.setColor(UIColor::corp_blue);
-      display.drawXbm((display.width() - 32) / 2, 18, advert_icon, 32, 32);
+      display.drawXbm((display.width() - 32) / 2, 18 + dy, advert_icon, 32, 32);
       display.setColor(UIColor::secondary_txt);
-      display.drawTextCentered(display.width() / 2, 56, "advert: " PRESS_LABEL);
+      display.drawTextCentered(display.width() / 2, 56 + dy, "advert: " PRESS_LABEL);
 #if ENV_INCLUDE_GPS == 1
     } else if (_page == HomePage::GPS) {
       LocationProvider* nmea = sensors.getLocationProvider();
@@ -462,18 +487,20 @@ public:
       display.setColor(UIColor::corp_blue);
       display.setTextSize(1);
       if (_shutdown_init) {
+        const int dy = NM_DY(34, 61);
         display.setColor(UIColor::warning_txt);
-        display.drawTextCentered(display.width() / 2, 34, "hibernating...");
+        display.drawTextCentered(display.width() / 2, 34 + dy, "hibernating...");
 #if defined(NM_EPD_420_BW)
         display.setColor(UIColor::secondary_txt);
-        display.drawTextCentered(display.width() / 2, 50, "Press BOOT to wake");
+        display.drawTextCentered(display.width() / 2, 50 + dy, "Press BOOT to wake");
 #endif
       } else {
+        const int dy = NM_DY(18, 81);
         display.setColor(UIColor::secondary_txt);
-        display.drawXbm((display.width() - 32) / 2, 18, power_icon, 32, 32);
-        display.drawTextCentered(display.width() / 2, 56, "hibernate: " PRESS_LABEL);
+        display.drawXbm((display.width() - 32) / 2, 18 + dy, power_icon, 32, 32);
+        display.drawTextCentered(display.width() / 2, 56 + dy, "hibernate: " PRESS_LABEL);
 #if defined(NM_EPD_420_BW)
-        display.drawTextCentered(display.width() / 2, 70, "Wake: Press BOOT");
+        display.drawTextCentered(display.width() / 2, 70 + dy, "Wake: Press BOOT");
 #endif
       }
     }
