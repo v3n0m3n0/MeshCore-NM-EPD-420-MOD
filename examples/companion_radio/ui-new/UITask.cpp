@@ -155,6 +155,9 @@ class HomeScreen : public UIScreen {
   bool sensors_scroll = false;
   int sensors_scroll_offset = 0;
   int next_sensors_refresh = 0;
+  float last_temp = 0.0f;
+  float last_hum = 0.0f;
+  bool has_env_data = false;
 
   void refresh_sensors() {
     if (millis() > next_sensors_refresh) {
@@ -165,7 +168,19 @@ class HomeScreen : public UIScreen {
       LPPReader reader (sensors_lpp.getBuffer(), sensors_lpp.getSize());
       uint8_t channel, type;
       while(reader.readHeader(channel, type)) {
-        reader.skipData(type);
+        if (type == LPP_TEMPERATURE) {
+          float t = 0.0f;
+          reader.readTemperature(t);
+          last_temp = t;
+          has_env_data = true;
+        } else if (type == LPP_RELATIVE_HUMIDITY) {
+          float h = 0.0f;
+          reader.readRelativeHumidity(h);
+          last_hum = h;
+          has_env_data = true;
+        } else {
+          reader.skipData(type);
+        }
         sensors_nb ++;
       }
       sensors_scroll = sensors_nb > UI_RECENT_LIST_SIZE;
@@ -189,6 +204,8 @@ public:
   }
 
   int render(DisplayDriver& display) override {
+    refresh_sensors();
+
     display.setColor(UIColor::title_bkg);
     display.fillRect(0, 0, display.width(), 12);
     char tmp[80];
@@ -223,25 +240,32 @@ public:
       display.setColor(UIColor::primary_txt);
       display.setTextSize(2);
       sprintf(tmp, "MSG: %d", _task->getMsgCount());
-      display.drawTextCentered(display.width() / 2, 22, tmp);
+      display.drawTextCentered(display.width() / 2, 26, tmp);
+
+      if (_task->hasConnection()) {
+        display.setColor(UIColor::warning_txt);
+        display.setTextSize(1);
+        display.drawTextCentered(display.width() / 2, 50, "< Connected >");
+      } else if (the_mesh.getBLEPin() != 0) { // BT pin
+        display.setColor(UIColor::warning_txt);
+        display.setTextSize(2);
+        sprintf(tmp, "Pin:%d", the_mesh.getBLEPin());
+        display.drawTextCentered(display.width() / 2, 50, tmp);
+      }
+
+      if (has_env_data) {
+        display.setColor(UIColor::secondary_txt);
+        display.setTextSize(1);
+        snprintf(tmp, sizeof(tmp), "%.1f C  |  %.0f%% RH", last_temp, last_hum);
+        display.drawTextCentered(display.width() / 2, 74, tmp);
+      }
 
       #ifdef WIFI_SSID
         IPAddress ip = WiFi.localIP();
         snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
         display.setTextSize(1);
-        display.drawTextCentered(display.width() / 2, 54, tmp);
+        display.drawTextCentered(display.width() / 2, 96, tmp);
       #endif
-      if (_task->hasConnection()) {
-        display.setColor(UIColor::warning_txt);
-        display.setTextSize(1);
-        display.drawTextCentered(display.width() / 2, 43, "< Connected >");
-
-      } else if (the_mesh.getBLEPin() != 0) { // BT pin
-        display.setColor(UIColor::warning_txt);
-        display.setTextSize(2);
-        sprintf(tmp, "Pin:%d", the_mesh.getBLEPin());
-        display.drawTextCentered(display.width() / 2, 43, tmp);
-      }
     } else if (_page == HomePage::RECENT) {
       the_mesh.getRecentlyHeard(recent, UI_RECENT_LIST_SIZE);
       display.setColor(UIColor::primary_txt);
