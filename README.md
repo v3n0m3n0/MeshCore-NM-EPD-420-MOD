@@ -1,7 +1,7 @@
 # RockBase NM-EPD-420 MOD — MeshCore Companion BLE
 
 > [!NOTE]
-> **Custom Hardware & Firmware MOD (`v1.17.1_mod`)**  
+> **Custom Hardware & Firmware MOD (`v1.17.1-mod-rev0.1`)**  
 > This repository is an optimized modification of MeshCore Companion BLE for the **RockBase NM-EPD-420-BW** board (ESP32-S3 + 4.2" 400×300 B/W E-Paper + SX1262 LoRa).
 >
 > **What makes this a MOD:**
@@ -10,7 +10,7 @@
 > * **Sensors:** Live AHT20 (temp/humidity) and 12-point LiPo battery OCV curve telemetry on Home & Radio pages (600s interval).
 > * **Reliability:** TWDT 15s watchdog guard, 5s BLE bond wipe via `USER` button, UTF-8 safety, and full 160-char message preview.
 >
-> 🚀 **1-Click Flasher & Binaries:** [Download Release v1.17.1_mod](https://github.com/v3n0m3n0/RockBase-NM-EPD-420_MOD/releases/tag/v1.17.1_mod)  
+> 🚀 **1-Click Flasher & Binaries:** [Download Release v1.17.1-mod-rev0.1](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-v1.17.1-Companion-BLE-MOD/releases/tag/v1.17.1-mod-rev0.1)  
 > 📄 **Changelog & Technical Specs:** [RELEASE_NOTES.md](RELEASE_NOTES.md) | [README_NM_EPD_420.md](README_NM_EPD_420.md)
 
 ---

@@ -18,12 +18,24 @@ if "%PORT%"=="" (
     exit /b 1
 )
 
+set "BINFILE="
+for /f "delims=" %%f in ('dir /b /o:n "%~dp0MeshCore-NM-EPD-420-BW-*-mod-rev*.bin" 2^>nul') do set "BINFILE=%%f"
+if "%BINFILE%"=="" (
+    if exist "%~dp0MeshCore-NM-EPD-420-BW-v1.17.1-mod-rev0.1.bin" (
+        set "BINFILE=MeshCore-NM-EPD-420-BW-v1.17.1-mod-rev0.1.bin"
+    ) else (
+        echo [ERROR] No MeshCore revision binary found in %~dp0
+        pause
+        exit /b 1
+    )
+)
+
 echo.
 echo [*] Target Port: %PORT%
-echo [*] Writing unified image: MeshCore-NM-EPD-420-BW-v1.17.1-mod.bin to 0x0...
+echo [*] Writing unified image: %BINFILE% to 0x0...
 echo.
 
-python -m esptool --port %PORT% --baud 921600 --chip esp32s3 write_flash 0x0 "%~dp0MeshCore-NM-EPD-420-BW-v1.17.1-mod.bin"
+python -m esptool --port %PORT% --baud 921600 --chip esp32s3 write_flash 0x0 "%~dp0%BINFILE%"
 
 if %ERRORLEVEL% NEQ 0 (
     echo.

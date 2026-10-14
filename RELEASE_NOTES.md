@@ -1,4 +1,4 @@
-# MeshCore-NM-EPD-420-BW v1.17.1-mod Release Notes
+# MeshCore-NM-EPD-420-BW v1.17.1-mod-rev0.1 Release Notes
 
 **Target Hardware:** RockBase NM-EPD-420-BW (ESP32-S3R8, 16MB Flash, 8MB Octal PSRAM, 4.2" 400×300 B/W E-Paper SSD1683, Semtech SX1262 LoRa, AHT20 sensor).  
 **Branch:** `nm-epd-420-bw-mod`  
@@ -132,7 +132,7 @@ Pre-compiled distribution files are available in the [`release/`](release/) dire
 
 ```bash
 # Unified image at 0x0
-python -m esptool --port COM15 --baud 921600 --chip esp32s3 write_flash 0x0 release/MeshCore-NM-EPD-420-BW-v1.17.1-mod.bin
+python -m esptool --port COM15 --baud 921600 --chip esp32s3 write_flash 0x0 release/MeshCore-NM-EPD-420-BW-v1.17.1-mod-rev0.1.bin
 
 # Clean software restart
 python -m esptool --port COM15 --before no-reset --after watchdog-reset flash_id

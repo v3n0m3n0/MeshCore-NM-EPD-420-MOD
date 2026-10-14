@@ -39,7 +39,13 @@ if (-not $Port) {
     exit 1
 }
 
-$firmwareFile = Join-Path $PSScriptRoot "MeshCore-NM-EPD-420-BW-v1.17.1-mod.bin"
+$binCandidates = Get-ChildItem -Path $PSScriptRoot -Filter "MeshCore-NM-EPD-420-BW-*-mod-rev*.bin" | Sort-Object Name -Descending
+if ($binCandidates) {
+    $firmwareFile = $binCandidates[0].FullName
+} else {
+    $firmwareFile = Join-Path $PSScriptRoot "MeshCore-NM-EPD-420-BW-v1.17.1-mod-rev0.1.bin"
+}
+
 if (-not (Test-Path $firmwareFile)) {
     Write-Host "[ERROR] Firmware binary not found at: $firmwareFile" -ForegroundColor Red
     exit 1
