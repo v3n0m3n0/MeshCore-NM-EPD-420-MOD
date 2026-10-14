@@ -1,6 +1,6 @@
-# MeshCore-NM-EPD-420 v1.17.1 Companion BLE
+# RockBase NM-EPD-420-BW v1.17.1-mod Companion BLE
 
-This repository is an optimized, hardware-verified fork of [MeshCore](https://github.com/meshcore-dev/MeshCore) providing full, production-ready support for the **RockBase NM-EPD-420** ESP32-S3 board with a **4.2-inch Black & White E-Paper display (GYE042A87 / SSD1683)** and **Semtech SX1262 LoRa transceiver**.
+This repository is an optimized, hardware-verified modification of [MeshCore](https://github.com/meshcore-dev/MeshCore) providing full, production-ready support for the **RockBase NM-EPD-420** ESP32-S3 board with a **4.2-inch Black & White E-Paper display (GYE042A87 / SSD1683)** and **Semtech SX1262 LoRa transceiver**.
 
 ---
 

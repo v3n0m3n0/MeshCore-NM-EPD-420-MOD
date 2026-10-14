@@ -1,9 +1,17 @@
-# MeshCore-NM-EPD-420 v1.17.1 Companion BLE
+# RockBase NM-EPD-420 MOD — MeshCore Companion BLE
 
-> [!TIP]
-> **RockBase NM-EPD-420 (ESP32-S3 + 4.2" B/W E-Paper + SX1262 LoRa)**
-> This fork (`MeshCore-NM-EPD-420 v1.17.1 Companion BLE`) includes verified hardware support, BLE persistent bonding, font diacritics transliteration, and optimized 400×300 E-Paper UI layouts for the RockBase NM-EPD-420.
-> **👉 Read the dedicated technical documentation:** [README_NM_EPD_420.md](README_NM_EPD_420.md)
+> [!NOTE]
+> **Custom Hardware & Firmware MOD (`v1.17.1_mod`)**  
+> This repository is an optimized modification of MeshCore Companion BLE for the **RockBase NM-EPD-420-BW** board (ESP32-S3 + 4.2" 400×300 B/W E-Paper + SX1262 LoRa).
+>
+> **What makes this a MOD:**
+> * **Display:** Native 400×300 layout (zero margins), dynamic vertical centering, and instant display controller power-down.
+> * **Power Hygiene:** Hardware deep-sleep wake via `BOOT` button (IO0) or LoRa packet (`DIO1`), with zero peripheral power leakage.
+> * **Sensors:** Live AHT20 (temp/humidity) and 12-point LiPo battery OCV curve telemetry on Home & Radio pages (600s interval).
+> * **Reliability:** TWDT 15s watchdog guard, 5s BLE bond wipe via `USER` button, UTF-8 safety, and full 160-char message preview.
+>
+> 🚀 **1-Click Flasher & Binaries:** [Download Release v1.17.1_mod](https://github.com/v3n0m3n0/RockBase-NM-EPD-420_MOD/releases/tag/v1.17.1_mod)  
+> 📄 **Changelog & Technical Specs:** [RELEASE_NOTES.md](RELEASE_NOTES.md) | [README_NM_EPD_420.md](README_NM_EPD_420.md)
 
 ---
 
