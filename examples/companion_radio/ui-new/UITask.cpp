@@ -530,6 +530,10 @@ public:
   }
 };
 
+#ifndef MAX_TEXT_LEN
+  #define MAX_TEXT_LEN 160
+#endif
+
 class MsgPreviewScreen : public UIScreen {
   UITask* _task;
   mesh::RTCClock* _rtc;
@@ -537,7 +541,11 @@ class MsgPreviewScreen : public UIScreen {
   struct MsgEntry {
     uint32_t timestamp;
     char origin[62];
+#if defined(NM_EPD_420_BW)
+    char msg[MAX_TEXT_LEN + 1];
+#else
     char msg[78];
+#endif
   };
   #define MAX_UNREAD_MSGS   32
   int num_unread;
@@ -554,11 +562,28 @@ public:
     auto p = &unread[head];
     p->timestamp = _rtc->getCurrentTime();
     if (path_len == 0xFF) {
-      sprintf(p->origin, "(D) %s:", from_name);
+      snprintf(p->origin, sizeof(p->origin), "(D) %s:", from_name);
     } else {
-      sprintf(p->origin, "(%d) %s:", (uint32_t) path_len, from_name);
+      snprintf(p->origin, sizeof(p->origin), "(%d) %s:", (uint32_t) path_len, from_name);
     }
     StrHelper::strncpy(p->msg, msg, sizeof(p->msg));
+#if defined(NM_EPD_420_BW)
+    // Prevent cutting multi-byte UTF-8 sequence at the end of buffer
+    size_t len = strlen(p->msg);
+    if (len > 0 && strlen(msg) >= sizeof(p->msg)) {
+      size_t i = len;
+      while (i > 0 && ((uint8_t)p->msg[i - 1] & 0xC0) == 0x80) {
+        i--;
+      }
+      if (i > 0 && ((uint8_t)p->msg[i - 1] & 0xC0) == 0xC0) {
+        uint8_t lead = (uint8_t)p->msg[i - 1];
+        size_t needed = (lead >= 0xF0) ? 4 : (lead >= 0xE0) ? 3 : 2;
+        if (len - (i - 1) < needed) {
+          p->msg[i - 1] = '\0';
+        }
+      }
+    }
+#endif
   }
 
   int render(DisplayDriver& display) override {
