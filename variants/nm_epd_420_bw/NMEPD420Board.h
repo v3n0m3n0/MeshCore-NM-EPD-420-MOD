@@ -7,5 +7,6 @@ class NMEPD420Board : public ESP32Board {
 public:
   void begin();
   uint16_t getBattMilliVolts() override;
+  static uint8_t estimateLipoPercentage(uint16_t milliVolts);
   const char* getManufacturerName() const override;
 };

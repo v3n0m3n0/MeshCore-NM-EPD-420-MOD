@@ -52,22 +52,68 @@ void NMEPD420Board::begin() {
 }
 
 uint16_t NMEPD420Board::getBattMilliVolts() {
-  analogReadResolution(12);
-  analogSetAttenuation(ADC_11db);
   #ifdef PIN_ADC_CTRL
+  pinMode(PIN_ADC_CTRL, OUTPUT);
   digitalWrite(PIN_ADC_CTRL, HIGH);
-  delay(10);
+  // Settle divider and decoupling RC filter (20 ms required per hardware validation)
+  delay(20);
   #endif
 
-  uint32_t raw = 0;
-  for (uint8_t i = 0; i < 4; i++) {
-    raw += analogReadMilliVolts(BATTERY_PIN);
+  analogReadResolution(12);
+  // ESP32-S3 ordering trap: attach pin with a throwaway read before configuring pin attenuation
+  (void)analogReadMilliVolts(BATTERY_PIN);
+  analogSetPinAttenuation(BATTERY_PIN, ADC_11db);
+
+  // Average 8 samples with 1 ms gap to filter out RF ripple and power supply noise
+  uint32_t sum = 0;
+  for (uint8_t i = 0; i < 8; i++) {
+    sum += analogReadMilliVolts(BATTERY_PIN);
+    delay(1);
   }
+
   #ifdef PIN_ADC_CTRL
   digitalWrite(PIN_ADC_CTRL, LOW);
   #endif
 
-  return static_cast<uint16_t>((raw / 4U) * ADC_MULTIPLIER);
+  uint32_t pin_mv = sum / 8U;
+  return static_cast<uint16_t>(pin_mv * ADC_MULTIPLIER);
+}
+
+struct LipoPoint {
+  uint16_t mv;
+  uint8_t pct;
+};
+
+static const LipoPoint LIPO_TABLE[] = {
+  { 4200, 100 },
+  { 4120,  90 },
+  { 4030,  80 },
+  { 3950,  70 },
+  { 3880,  60 },
+  { 3820,  50 },
+  { 3770,  40 },
+  { 3720,  30 },
+  { 3650,  20 },
+  { 3550,  10 },
+  { 3400,   5 },
+  { 3300,   0 }
+};
+
+uint8_t NMEPD420Board::estimateLipoPercentage(uint16_t milliVolts) {
+  constexpr size_t NUM_POINTS = sizeof(LIPO_TABLE) / sizeof(LIPO_TABLE[0]);
+  if (milliVolts >= LIPO_TABLE[0].mv) return 100;
+  if (milliVolts <= LIPO_TABLE[NUM_POINTS - 1].mv) return 0;
+
+  for (size_t i = 0; i < NUM_POINTS - 1; ++i) {
+    if (milliVolts >= LIPO_TABLE[i + 1].mv) {
+      uint16_t v_high = LIPO_TABLE[i].mv;
+      uint16_t v_low  = LIPO_TABLE[i + 1].mv;
+      uint8_t  p_high = LIPO_TABLE[i].pct;
+      uint8_t  p_low  = LIPO_TABLE[i + 1].pct;
+      return p_low + static_cast<uint8_t>(((uint32_t)(milliVolts - v_low) * (p_high - p_low)) / (v_high - v_low));
+    }
+  }
+  return 0;
 }
 
 const char* NMEPD420Board::getManufacturerName() const {

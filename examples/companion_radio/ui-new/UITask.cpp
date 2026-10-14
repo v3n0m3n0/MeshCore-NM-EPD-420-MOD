@@ -112,6 +112,9 @@ class HomeScreen : public UIScreen {
 
   void renderBatteryIndicator(DisplayDriver& display, uint16_t batteryMilliVolts) {
     // Convert millivolts to percentage
+#if defined(NM_EPD_420_BW)
+    int batteryPercentage = NMEPD420Board::estimateLipoPercentage(batteryMilliVolts);
+#else
 #ifndef BATT_MIN_MILLIVOLTS
   #define BATT_MIN_MILLIVOLTS 3000
 #endif
@@ -123,6 +126,7 @@ class HomeScreen : public UIScreen {
     int batteryPercentage = ((batteryMilliVolts - minMilliVolts) * 100) / (maxMilliVolts - minMilliVolts);
     if (batteryPercentage < 0) batteryPercentage = 0; // Clamp to 0%
     if (batteryPercentage > 100) batteryPercentage = 100; // Clamp to 100%
+#endif
 
     // battery icon
     int iconWidth = 24;
@@ -130,6 +134,15 @@ class HomeScreen : public UIScreen {
     int iconX = display.width() - iconWidth - 5; // Position the icon near the top-right corner
     int iconY = 0;
     display.setColor(UIColor::title_txt);
+
+#if defined(NM_EPD_420_BW)
+    // Draw numeric percentage in front of battery icon
+    char pctStr[8];
+    snprintf(pctStr, sizeof(pctStr), "%d%%", batteryPercentage);
+    int textW = display.getTextWidth(pctStr);
+    display.setCursor(iconX - textW - 3, iconY + 2);
+    display.print(pctStr);
+#endif
 
     // battery outline
     display.drawRect(iconX, iconY, iconWidth, iconHeight);
