@@ -102,9 +102,11 @@ static void _ftoa(float f, char *p, int *status)
     *p++ = '0';
   else 
   {
-    ltoa(int_part, p, 10);
-    while (*p)
-      p++;
+    char int_part_str[12];
+    snprintf(int_part_str, sizeof(int_part_str), "%ld", static_cast<long>(int_part));
+    char *q = int_part_str;
+    while (*q)
+      *p++ = *q++;
   }
   *p++ = '.';
   if (frac_part == 0)
