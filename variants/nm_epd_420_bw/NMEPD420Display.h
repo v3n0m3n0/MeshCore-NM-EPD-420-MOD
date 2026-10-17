@@ -9,6 +9,9 @@
 #include <Fonts/FreeSansBold12pt7b.h>
 #include <Fonts/FreeSans18pt7b.h>
 #include <CRC32.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
 
 #include <helpers/ui/DisplayDriver.h>
 
@@ -29,8 +32,17 @@ class NMEPD420Display : public DisplayDriver {
 
   int _font_ascender = 12;
   int _line_height = 11;
+  int _space_advance = 6;
   int _cursor_x = 0;
   int _cursor_y = 0;
+
+  TaskHandle_t _refresh_task_handle = nullptr;
+  SemaphoreHandle_t _epd_mutex = nullptr;
+  volatile bool _is_refreshing = false;
+  volatile bool _refresh_full = false;
+
+  static void epdRefreshTask(void* param);
+  void waitWhileBusy();
 
 public:
   NMEPD420Display();
@@ -38,6 +50,7 @@ public:
   bool begin();
   bool isOn() override { return _isOn; }
   bool isEink() override { return true; }
+  bool isBusy() override { return _is_refreshing; }
   void turnOn() override;
   void turnOff() override;
   void clear() override;
@@ -52,4 +65,5 @@ public:
   void drawXbm(int x, int y, const uint8_t* bits, int w, int h) override;
   uint16_t getTextWidth(const char* str) override;
   void endFrame() override;
+  void forceFullRefresh();
 };

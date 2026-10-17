@@ -1,4 +1,4 @@
-# MeshCore-NM-EPD-420-BW v1.17.1-mod-rev0.1 Release Notes
+# MeshCore-NM-EPD-420-BW v1.17.1-mod-rev0.3 Release Notes
 
 **Target Hardware:** RockBase NM-EPD-420-BW (ESP32-S3R8, 16MB Flash, 8MB Octal PSRAM, 4.2" 400×300 B/W E-Paper SSD1683, Semtech SX1262 LoRa, AHT20 sensor).  
 **Branch:** `nm-epd-420-bw-mod`  
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This release delivers an optimized, hardware-verified firmware modification package for the **RockBase NM-EPD-420-BW** companion radio board. It resolves memory safety vulnerabilities found in upstream code, unlocks the full 400×300 native e-paper panel, introduces an accurate non-linear LiPo battery measurement system, integrates onboard AHT20 environmental sensing, implements physical button deep-sleep wake, and eliminates quiescent power leakage across all peripherals.
+This release delivers an optimized, hardware-verified firmware modification package for the **RockBase NM-EPD-420-BW** companion radio board. It resolves memory safety vulnerabilities found in upstream code, unlocks the full 400×300 native e-paper panel, offloads e-paper refreshes to an asynchronous Core 0 FreeRTOS task over 16 MHz FSPI, introduces non-blocking state machines for battery ADC and AHT20 sensing, allocates offline message queues in 8 MB Octal PSRAM with $O(1)$ circular buffers, implements physical button deep-sleep wake, and eliminates quiescent power leakage across all peripherals.
 
 Every package in this build has been thoroughly compiled with merge-bin and verified on physical hardware.
 
@@ -39,9 +39,9 @@ Every package in this build has been thoroughly compiled with merge-bin and veri
 
 ### 4. Advanced Battery ADC & LiPo OCV Curve
 
-* **ESP32-S3 ADC Order Bug Fix:** Eliminated `[E] __analogChannelConfig` error by adding a priming throwaway read before setting `ADC_11db` attenuation.
+* **ESP32-S3 ADC Order Bug Fix:** Eliminated `[E] __analogChannelConfig` error by adding a priming throwaway read before configuring `ADC_11db` attenuation.
 * **Settle Time:** Extended P-MOSFET divider stabilization delay to 20 ms (`BATT_ADC_SETTLE_MS = 20`) on IO43.
-* **Noise Filtering:** 8-sample moving average with 1 ms inter-sample delay.
+* **Noise Filtering:** 8-sample moving average with 150 µs inter-sample delay.
 * **12-Point Non-Linear Curve:** Implemented piecewise linear interpolation based on the true LiPo open-circuit voltage discharge curve (`4.20V = 100%`, `3.82V = 50%`, `3.27V = 0%`).
 * **Title Bar Display:** Live percentage numerical text (e.g., `100%`) rendered directly alongside the battery icon.
 
@@ -49,7 +49,7 @@ Every package in this build has been thoroughly compiled with merge-bin and veri
 
 * **Physical Button Wakeup:** Configured `esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_BOOT_BTN, 0)` on `BOOT` (IO0, RTC GPIO 0, active LOW).
 * **LoRa Packet Wakeup:** Configured `esp_sleep_enable_ext1_wakeup((1ULL << P_LORA_DIO_1), ESP_EXT1_WAKEUP_ANY_HIGH)` on LoRa `DIO1` (IO14, RTC GPIO 14).
-* **Peripheral Isolation:** Shuts down power gates (IO40, IO43, IO41, IO44), latches LoRa NSS HIGH in RTC domain, and puts SSD1683 controller to sleep.
+* **Peripheral Isolation:** Shuts down power gates (IO40, IO43, IO41, IO44), latches LoRa NSS (IO8) and shared MicroSD CS (IO7) HIGH in RTC domain, and puts SSD1683 controller to sleep.
 * **Hibernate Screen:** Displays `"Wake: Press BOOT"` and `"hibernating... Press BOOT to wake"` on `HomePage::SHUTDOWN`.
 
 ### 6. Full-Length Message Preview on "Unread" Page
@@ -80,10 +80,25 @@ Every package in this build has been thoroughly compiled with merge-bin and veri
 * **Elimination of 1 Hz Refresh Storm:** Fixed an issue where second-by-second timestamp increments (`%ds`) invalidated the display CRC every second on `MsgPreviewScreen`, causing the SSD1683 e-paper to execute non-stop, 100% blocking 1.5s refresh cycles that dropped button presses.
 * **E-Paper Friendly Timestamp:** Messages under 60 seconds now display static `"now"` (applied to both UNREAD and RECENT screens), eliminating redundant screen redraws and keeping the CPU loop 100% responsive.
 * **Extended Render Interval:** Configured e-paper render return interval to 60s (`AUTO_OFF_MILLIS=0`), waking immediately only when a new message arrives.
-* **Unified Dual-Button Navigation:**
-  * `BOOT` single-click (`KEY_NEXT`): Steps through unread messages; returns to Home on the last message.
+* **Bidirectional Dual-Button Navigation & `X/Y` Pagination:**
+  * Header displays position indicator `Unread: X/Y` when multiple unread messages are queued.
+  * `BOOT` single-click (`KEY_NEXT`): Advances to older unread message; returns to Home after the last message.
+  * `USER` single-click (`KEY_PREV`): Steps back to newer unread message; dismisses preview when at the first message.
   * `BOOT` double-click (`KEY_SELECT`) / long-press (`KEY_ENTER`): Instantly clears unread queue and returns to Home.
-  * `USER` click (`KEY_PREV`): Instantly dismisses unread queue and returns to Home.
+
+### 10. Architecture & Concurrency Optimizations (rev0.3)
+
+* **Asynchronous Core 0 FreeRTOS E-Paper Task & 16 MHz FSPI:** Offloaded physical SSD1683 refresh cycles (`display.display(true/false)` + `display.powerOff()`) to a background FreeRTOS task on Core 0 (`epdRefreshTask`) and raised FSPI clock from 4 MHz to 16 MHz. Reduces UI frame commit latency on the main thread from 600–2200 ms to <1 ms.
+* **Non-Blocking State Machines for Battery ADC & AHT20 Warmup:** Eliminated synchronous `delay(20)` and `delay(50)` calls during runtime telemetry refreshes via two-stage `millis()` state machines.
+* **Shared HSPI Bus MicroSD Protection (`PIN_SDCARD_CS` IO7):** Explicitly drives and RTC-holds GPIO 7 (`SD_CS`) HIGH so an inserted MicroSD card never interferes with SX1262 LoRa SPI transactions or leaks current in deep sleep.
+* **$O(1)$ Circular Ring Buffers & Octal PSRAM Allocation:** Converted `MyMesh::offline_queue` (allocated in 8 MB Octal PSRAM, freeing ~44.5 KB of internal SRAM) and `SerialBLEInterface::send_queue` (expanded 4x from 4 to 16 frames) to $O(1)$ circular buffers.
+* **$O(\log K)$ Binary-Search Text Ellipsizing & Extended UTF-8 (`0xC2`):** Replaced linear character stripping in `drawTextEllipsized()` with binary search and added `0xC2` symbol transliteration (`°`, `±`, `²`, `³`, `µ`, `·`, NBSP).
+* **Visual Factory Reset Feedback & Restored Build Targets:** Added on-screen progress prompts during the 5-second `USER` button factory reset and restored `companion_radio_usb`, `repeater`, `room_server`, and `kiss_modem` PlatformIO targets.
+
+### 11. Future Optimization Backlog
+
+* **I2S Audio Notification Synthesizer (ES8311 + NS4150B):** Hardware-gated I2S tone generator (`CODEC_EN` IO44 + `PA_CTRL` IO41) for audible message notifications (`UITask::notify()`).
+* **Filesystem Migration (`SPIFFS` -> `LittleFS`):** Transition ESP32 storage backend from `SPIFFS` to `LittleFS` for improved flash wear-leveling, faster contact serialization, and power-loss resilience.
 
 ---
 

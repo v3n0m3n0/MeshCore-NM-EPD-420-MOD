@@ -10,6 +10,36 @@ NMEPD420Display::NMEPD420Display()
   : DisplayDriver(LOGICAL_WIDTH, LOGICAL_HEIGHT),
     display(EINK_DISPLAY_MODEL(PIN_DISPLAY_CS, PIN_DISPLAY_DC, PIN_DISPLAY_RST, PIN_DISPLAY_BUSY)) {}
 
+void NMEPD420Display::epdRefreshTask(void* param) {
+  auto* self = static_cast<NMEPD420Display*>(param);
+  for (;;) {
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    if (self->_epd_mutex && xSemaphoreTake(self->_epd_mutex, portMAX_DELAY) == pdTRUE) {
+      if (self->_refresh_full) {
+        self->display.setFullWindow();
+        self->display.display(false);
+        self->display.setPartialWindow(0, 0, self->display.width(), self->display.height());
+      } else {
+        self->display.display(true);
+      }
+      // Power off SSD1683 charge pumps immediately after refresh to eliminate idle current draw
+      self->display.powerOff();
+      self->_is_refreshing = false;
+      xSemaphoreGive(self->_epd_mutex);
+    } else {
+      self->_is_refreshing = false;
+    }
+  }
+}
+
+void NMEPD420Display::waitWhileBusy() {
+  if (_epd_mutex) {
+    if (xSemaphoreTake(_epd_mutex, portMAX_DELAY) == pdTRUE) {
+      xSemaphoreGive(_epd_mutex);
+    }
+  }
+}
+
 bool NMEPD420Display::begin() {
   pinMode(PIN_DISPLAY_CS, OUTPUT);
   digitalWrite(PIN_DISPLAY_CS, HIGH);
@@ -18,7 +48,15 @@ bool NMEPD420Display::begin() {
   pinMode(PIN_DISPLAY_RST, OUTPUT);
   digitalWrite(PIN_DISPLAY_RST, HIGH);
 
-  display.epd2.selectSPI(nm_epd_spi, SPISettings(4000000, MSBFIRST, SPI_MODE0));
+  if (!_epd_mutex) {
+    _epd_mutex = xSemaphoreCreateMutex();
+  }
+  if (!_refresh_task_handle) {
+    xTaskCreatePinnedToCore(epdRefreshTask, "epd_ref", 4096, this, 1, &_refresh_task_handle, 0);
+  }
+
+  // SSD1683 supports up to 20 MHz SPI write clock; 16 MHz achieves 4x faster frame transfer than 4 MHz
+  display.epd2.selectSPI(nm_epd_spi, SPISettings(16000000, MSBFIRST, SPI_MODE0));
   nm_epd_spi.begin(PIN_DISPLAY_SCLK, PIN_DISPLAY_MISO, PIN_DISPLAY_MOSI, PIN_DISPLAY_CS);
   display.init(115200, true, 2, false);
   display.setRotation(DISPLAY_ROTATION);
@@ -38,12 +76,14 @@ void NMEPD420Display::turnOn() {
 
 void NMEPD420Display::turnOff() {
   if (_isOn) {
+    waitWhileBusy();
     display.powerOff();
     _isOn = false;
   }
 }
 
 void NMEPD420Display::clear() {
+  waitWhileBusy();
   display.fillScreen(GxEPD_WHITE);
   display.setTextColor(GxEPD_BLACK);
   display_crc.reset();
@@ -53,9 +93,11 @@ void NMEPD420Display::clear() {
 }
 
 void NMEPD420Display::startFrame(ColorVal bkg) {
+  waitWhileBusy();
   display.fillScreen(bkg);
   display.setTextColor(_curr_color = UIColor::primary_txt);
   display_crc.reset();
+  display_crc.update<ColorVal>(bkg);
   _cursor_x = X_OFFSET * EINK_SCALE_X;
   _cursor_y = Y_OFFSET * EINK_SCALE_Y;
   display.setCursor(_cursor_x, _cursor_y + _font_ascender);
@@ -68,21 +110,25 @@ void NMEPD420Display::setTextSize(int sz) {
       display.setFont(&FreeSans9pt7b);
       _font_ascender = 12;
       _line_height = 11;
+      _space_advance = 6;
       break;
     case 2:
       display.setFont(&FreeSansBold12pt7b);
       _font_ascender = 17;
       _line_height = 16;
+      _space_advance = 8;
       break;
     case 3:
       display.setFont(&FreeSans18pt7b);
       _font_ascender = 25;
       _line_height = 24;
+      _space_advance = 11;
       break;
     default:
       display.setFont(&FreeSans9pt7b);
       _font_ascender = 12;
       _line_height = 11;
+      _space_advance = 6;
       break;
   }
   display.setCursor(_cursor_x, _cursor_y + _font_ascender);
@@ -139,12 +185,8 @@ void NMEPD420Display::printWordWrap(const char* str, int max_width) {
   int cur_y = _cursor_y;
   const int line_step = _line_height * EINK_SCALE_Y;
 
-  // Measure space width using difference between "x x" and "xx"
-  int16_t x1, y1;
-  uint16_t w_sp, h_sp, w_xx;
-  display.getTextBounds("x x", 0, 0, &x1, &y1, &w_sp, &h_sp);
-  display.getTextBounds("xx", 0, 0, &x1, &y1, &w_xx, &h_sp);
-  const int space_advance = (w_sp > w_xx) ? (w_sp - w_xx) : 6;
+  // Use cached font space advance
+  const int space_advance = _space_advance;
 
   const char* p = str;
   while (*p) {
@@ -225,14 +267,26 @@ void NMEPD420Display::drawXbm(int x, int y, const uint8_t* bits, int w, int h) {
   for (uint16_t by = 0; by < h; by++) {
     const int y1 = start_y + static_cast<int>(by * EINK_SCALE_Y);
     const int y2 = start_y + static_cast<int>((by + 1) * EINK_SCALE_Y);
+    int span_start = -1;
     for (uint16_t bx = 0; bx < w; bx++) {
-      const int x1 = start_x + static_cast<int>(bx * EINK_SCALE_X);
-      const int x2 = start_x + static_cast<int>((bx + 1) * EINK_SCALE_X);
       const uint16_t byte_offset = by * width_in_bytes + bx / 8;
       const uint8_t bit_mask = 0x80 >> (bx & 7);
-      if (pgm_read_byte(bits + byte_offset) & bit_mask) {
-        display.fillRect(x1, y1, x2 - x1, y2 - y1, _curr_color);
+      bool is_set = (pgm_read_byte(bits + byte_offset) & bit_mask) != 0;
+      if (is_set) {
+        if (span_start < 0) span_start = bx;
+      } else {
+        if (span_start >= 0) {
+          const int x1 = start_x + static_cast<int>(span_start * EINK_SCALE_X);
+          const int x2 = start_x + static_cast<int>(bx * EINK_SCALE_X);
+          display.fillRect(x1, y1, x2 - x1, y2 - y1, _curr_color);
+          span_start = -1;
+        }
       }
+    }
+    if (span_start >= 0) {
+      const int x1 = start_x + static_cast<int>(span_start * EINK_SCALE_X);
+      const int x2 = start_x + static_cast<int>(w * EINK_SCALE_X);
+      display.fillRect(x1, y1, x2 - x1, y2 - y1, _curr_color);
     }
   }
 }
@@ -259,20 +313,33 @@ void NMEPD420Display::endFrame() {
   if (crc == last_display_crc_value) return;
 
   if (partial_refresh_count >= PARTIAL_REFRESH_LIMIT) {
-    display.setFullWindow();
-    display.display(false);
+    _refresh_full = true;
     partial_refresh_count = 0;
-    display.setPartialWindow(0, 0, display.width(), display.height());
   } else {
-    display.display(true);
+    _refresh_full = false;
     partial_refresh_count++;
   }
 
-  // Energy saving: power off the SSD1683 booster/charge pumps immediately after refresh.
-  // The bistable E-Paper holds the image indefinitely with zero power draw.
-  display.powerOff();
-
   last_display_crc_value = crc;
+
+  if (_refresh_task_handle) {
+    _is_refreshing = true;
+    xTaskNotifyGive(_refresh_task_handle);
+  } else {
+    if (_refresh_full) {
+      display.setFullWindow();
+      display.display(false);
+      display.setPartialWindow(0, 0, display.width(), display.height());
+    } else {
+      display.display(true);
+    }
+    display.powerOff();
+  }
+}
+
+void NMEPD420Display::forceFullRefresh() {
+  partial_refresh_count = PARTIAL_REFRESH_LIMIT;
+  last_display_crc_value = 0;
 }
 
 #endif

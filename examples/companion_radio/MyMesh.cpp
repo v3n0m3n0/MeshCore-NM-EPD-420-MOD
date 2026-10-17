@@ -5,6 +5,7 @@
 
 #if defined(ESP32)
 #include "esp_gap_ble_api.h"
+#include "esp_heap_caps.h"
 #include <helpers/esp32/SerialBLEInterface.h>
 #endif
 
@@ -222,38 +223,42 @@ bool MyMesh::Frame::isChannelMsg() const {
 }
 
 void MyMesh::addToOfflineQueue(const uint8_t frame[], int len) {
+  if (!offline_queue) return;
   if (offline_queue_len >= OFFLINE_QUEUE_SIZE) {
     MESH_DEBUG_PRINTLN("WARN: offline_queue is full!");
     int pos = 0;
     while (pos < offline_queue_len) {
-      if (offline_queue[pos].isChannelMsg()) {
+      int phys_pos = (offline_queue_head + pos) % OFFLINE_QUEUE_SIZE;
+      if (offline_queue[phys_pos].isChannelMsg()) {
         for (int i = pos; i < offline_queue_len - 1; i++) { // delete oldest channel msg from queue
-          offline_queue[i] = offline_queue[i + 1];
+          int dst_idx = (offline_queue_head + i) % OFFLINE_QUEUE_SIZE;
+          int src_idx = (offline_queue_head + i + 1) % OFFLINE_QUEUE_SIZE;
+          offline_queue[dst_idx] = offline_queue[src_idx];
         }
         MESH_DEBUG_PRINTLN("INFO: removed oldest channel message from queue.");
-        offline_queue[offline_queue_len - 1].len = len;
-        memcpy(offline_queue[offline_queue_len - 1].buf, frame, len);
+        int last_idx = (offline_queue_head + offline_queue_len - 1) % OFFLINE_QUEUE_SIZE;
+        offline_queue[last_idx].len = len;
+        memcpy(offline_queue[last_idx].buf, frame, len);
         return;
       }
       pos++;
     }
     MESH_DEBUG_PRINTLN("INFO: no channel messages to remove from queue.");
   } else {
-    offline_queue[offline_queue_len].len = len;
-    memcpy(offline_queue[offline_queue_len].buf, frame, len);
+    int tail_idx = (offline_queue_head + offline_queue_len) % OFFLINE_QUEUE_SIZE;
+    offline_queue[tail_idx].len = len;
+    memcpy(offline_queue[tail_idx].buf, frame, len);
     offline_queue_len++;
   }
 }
 
 int MyMesh::getFromOfflineQueue(uint8_t frame[]) {
-  if (offline_queue_len > 0) {         // check offline queue
-    size_t len = offline_queue[0].len; // take from top of queue
-    memcpy(frame, offline_queue[0].buf, len);
+  if (offline_queue && offline_queue_len > 0) { // check offline queue
+    size_t len = offline_queue[offline_queue_head].len; // O(1) take from head of circular queue
+    memcpy(frame, offline_queue[offline_queue_head].buf, len);
 
+    offline_queue_head = (offline_queue_head + 1) % OFFLINE_QUEUE_SIZE;
     offline_queue_len--;
-    for (int i = 0; i < offline_queue_len; i++) { // delete top item from queue
-      offline_queue[i] = offline_queue[i + 1];
-    }
     return len;
   }
   return 0; // queue is empty
@@ -871,6 +876,8 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   _iter_started = false;
   _cli_rescue = false;
   offline_queue_len = 0;
+  offline_queue_head = 0;
+  offline_queue = NULL;
   app_target_ver = 0;
   clearPendingReqs();
   next_ack_idx = 0;
@@ -904,6 +911,17 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
 }
 
 void MyMesh::begin(bool has_display) {
+  if (!offline_queue) {
+#if defined(ESP32)
+    offline_queue = static_cast<Frame*>(heap_caps_malloc(OFFLINE_QUEUE_SIZE * sizeof(Frame), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!offline_queue) {
+      offline_queue = static_cast<Frame*>(malloc(OFFLINE_QUEUE_SIZE * sizeof(Frame)));
+    }
+#else
+    offline_queue = new Frame[OFFLINE_QUEUE_SIZE];
+#endif
+  }
+
   BaseChatMesh::begin();
 
   if (!_store->loadMainIdentity(self_id)) {

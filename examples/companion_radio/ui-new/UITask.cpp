@@ -357,7 +357,13 @@ public:
       sprintf(tmp, "TX: %ddBm", _node_prefs->tx_power_dbm);
       display.print(tmp);
       display.setCursor(0, 53);
+#if defined(NM_EPD_420_BW)
+      int raw_floor = radio_driver.getNoiseFloor();
+      int smoothed_floor = (raw_floor / 3) * 3; // quantization step of 3 dBm to eliminate screen flicker
+      sprintf(tmp, "Noise floor: %d", smoothed_floor);
+#else
       sprintf(tmp, "Noise floor: %d", radio_driver.getNoiseFloor());
+#endif
       display.print(tmp);
 
 #if defined(NM_EPD_420_BW)
@@ -581,7 +587,11 @@ public:
 #endif
       }
     }
+#if defined(NM_EPD_420_BW)
+    return 30000;  // next render after 30000 ms (30s idle on E-Paper)
+#else
     return 5000;   // next render after 5000 ms
+#endif
   }
 
   bool handleInput(char c) override {
@@ -614,6 +624,9 @@ public:
       return true;
     }
     if (c == KEY_ENTER && _page == HomePage::RADIO) {
+#if defined(NM_EPD_420_BW)
+      sensors.triggerAsyncRefresh();
+#endif
       next_sensors_refresh = 0;
       _task->showAlert("Sensors refreshed", 800);
       return true;
@@ -658,15 +671,17 @@ class MsgPreviewScreen : public UIScreen {
   };
   #define MAX_UNREAD_MSGS   32
   int num_unread;
+  int view_idx = 0;
   int head = MAX_UNREAD_MSGS - 1; // index of latest unread message
   MsgEntry unread[MAX_UNREAD_MSGS];
 
 public:
-  MsgPreviewScreen(UITask* task, mesh::RTCClock* rtc) : _task(task), _rtc(rtc) { num_unread = 0; }
+  MsgPreviewScreen(UITask* task, mesh::RTCClock* rtc) : _task(task), _rtc(rtc) { num_unread = 0; view_idx = 0; }
 
   void addPreview(uint8_t path_len, const char* from_name, const char* msg) {
     head = (head + 1) % MAX_UNREAD_MSGS;
     if (num_unread < MAX_UNREAD_MSGS) num_unread++;
+    view_idx = 0; // focus newest message
 
     auto p = &unread[head];
     p->timestamp = _rtc->getCurrentTime();
@@ -696,14 +711,20 @@ public:
   }
 
   int render(DisplayDriver& display) override {
-    char tmp[16];
+    char tmp[24];
     display.setCursor(0, 0);
     display.setTextSize(1);
     display.setColor(UIColor::corp_blue);
-    sprintf(tmp, "Unread: %d", num_unread);
+    if (num_unread > 1) {
+      snprintf(tmp, sizeof(tmp), "Unread: %d/%d", view_idx + 1, num_unread);
+    } else {
+      snprintf(tmp, sizeof(tmp), "Unread: %d", num_unread);
+    }
     display.print(tmp);
 
-    auto p = &unread[head];
+    if (view_idx < 0 || view_idx >= num_unread) view_idx = 0;
+    int entry_idx = (head + MAX_UNREAD_MSGS - view_idx) % MAX_UNREAD_MSGS;
+    auto p = &unread[entry_idx];
 
     int secs = _rtc->getCurrentTime() - p->timestamp;
 #if defined(NM_EPD_420_BW)
@@ -749,17 +770,28 @@ public:
 
   bool handleInput(char c) override {
     if (c == KEY_NEXT || c == KEY_RIGHT) {
-      head = (head + MAX_UNREAD_MSGS - 1) % MAX_UNREAD_MSGS;
-      num_unread--;
-      if (num_unread <= 0) {
+      view_idx++;
+      if (view_idx >= num_unread) {
         num_unread = 0;
+        view_idx = 0;
         _task->gotoHomeScreen();
       }
       return true;
     }
-    // USER button (KEY_PREV / KEY_LEFT) or Double-Click / Long-Press BOOT (KEY_SELECT / KEY_ENTER): Dismiss immediately
-    if (c == KEY_PREV || c == KEY_LEFT || c == KEY_SELECT || c == KEY_ENTER) {
+    if (c == KEY_PREV || c == KEY_LEFT) {
+      if (view_idx > 0) {
+        view_idx--;
+      } else {
+        num_unread = 0;
+        view_idx = 0;
+        _task->gotoHomeScreen();
+      }
+      return true;
+    }
+    // Double-Click / Long-Press BOOT (KEY_SELECT / KEY_ENTER): Dismiss all immediately
+    if (c == KEY_SELECT || c == KEY_ENTER) {
       num_unread = 0;  // clear unread queue
+      view_idx = 0;
       _task->gotoHomeScreen();
       return true;
     }
@@ -919,11 +951,14 @@ void UITask::shutdown(bool restart){
 }
 
 bool UITask::isButtonPressed() const {
+  bool pressed = false;
 #ifdef PIN_USER_BTN
-  return user_btn.isPressed();
-#else
-  return false;
+  pressed = pressed || user_btn.isPressed();
 #endif
+#if defined(NM_EPD_420_BW)
+  pressed = pressed || boot_btn.isPressed();
+#endif
+  return pressed;
 }
 
 void UITask::loop() {
@@ -966,6 +1001,10 @@ void UITask::loop() {
     c = checkDisplayOn(KEY_PREV);
   } else if (c == 0 && ev == BUTTON_EVENT_LONG_PRESS) {
     c = handleLongPress(KEY_PREV);
+  } else if (ev == BUTTON_EVENT_DOUBLE_CLICK) {
+    display.forceFullRefresh();
+    showAlert("Screen Refresh", 800);
+    _next_refresh = 0;
   } 
 #elif defined(PIN_USER_BTN)
   int ev = user_btn.check();
@@ -1031,7 +1070,7 @@ void UITask::loop() {
   if (curr) curr->poll();
 
   if (_display != NULL && _display->isOn()) {
-    if (millis() >= _next_refresh && curr) {
+    if (millis() >= _next_refresh && curr && !_display->isBusy()) {
       _display->startFrame();
       int delay_millis = curr->render(*_display);
       if (millis() < _alert_expiry) {  // render alert popup

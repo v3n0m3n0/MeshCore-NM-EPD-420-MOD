@@ -178,14 +178,34 @@ void setup() {
   pinMode(PIN_USER_BTN, INPUT_PULLUP);
   if (digitalRead(PIN_USER_BTN) == LOW) {
     uint32_t press_start = millis();
+    bool prompt_shown = false;
     while (digitalRead(PIN_USER_BTN) == LOW && (millis() - press_start < 5000)) {
+      #ifdef DISPLAY_CLASS
+      if (!prompt_shown && disp != NULL && (millis() - press_start >= 1000)) {
+        prompt_shown = true;
+        disp->startFrame();
+        disp->setTextSize(1);
+        disp->drawTextCentered(disp->width() / 2, disp->height() / 2 - 12, "Hold USER button (5s)");
+        disp->drawTextCentered(disp->width() / 2, disp->height() / 2 + 4, "for Factory Reset...");
+        disp->endFrame();
+      }
+      #endif
       delay(50);
     }
     if (millis() - press_start >= 5000) {
+      #ifdef DISPLAY_CLASS
+      if (disp != NULL) {
+        disp->startFrame();
+        disp->setTextSize(1);
+        disp->drawTextCentered(disp->width() / 2, disp->height() / 2 - 6, "Factory Resetting...");
+        disp->endFrame();
+        disp->turnOff();
+      }
+      #endif
       nvs_flash_erase();
       nvs_flash_init();
       store.formatFileSystem();
-      delay(1000);
+      delay(500);
       board.reboot();
     }
   }
@@ -276,6 +296,8 @@ void loop() {
   if (!the_mesh.hasPendingWork()) {
 #if defined(NRF52_PLATFORM)
     board.sleep(0); // nrf ignores seconds param, sleeps whenever possible
+#elif defined(ESP32)
+    delay(1);       // Yield CPU to FreeRTOS IDLE task, reducing busy-wait current
 #endif
   }
 

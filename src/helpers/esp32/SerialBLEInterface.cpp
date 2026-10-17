@@ -154,6 +154,8 @@ void SerialBLEInterface::onWrite(BLECharacteristic* pCharacteristic, esp_ble_gat
 void SerialBLEInterface::clearBuffers() {
   xQueueReset(recv_queue);
   send_queue_len = 0;
+  send_queue_head = 0;
+  send_queue_tail = 0;
 }
 
 void SerialBLEInterface::enable() { 
@@ -198,8 +200,9 @@ size_t SerialBLEInterface::writeFrame(const uint8_t src[], size_t len) {
       return 0;
     }
 
-    send_queue[send_queue_len].len = len;  // add to send queue
-    memcpy(send_queue[send_queue_len].buf, src, len);
+    send_queue[send_queue_tail].len = len;  // O(1) enqueue into circular buffer
+    memcpy(send_queue[send_queue_tail].buf, src, len);
+    send_queue_tail = (send_queue_tail + 1) % FRAME_QUEUE_SIZE;
     send_queue_len++;
 
     return len;
@@ -207,7 +210,11 @@ size_t SerialBLEInterface::writeFrame(const uint8_t src[], size_t len) {
   return 0;
 }
 
+#if defined(NM_EPD_420_BW)
+#define  BLE_WRITE_MIN_INTERVAL   20   // Fast notification throughput for companion app sync
+#else
 #define  BLE_WRITE_MIN_INTERVAL   60
+#endif
 
 bool SerialBLEInterface::isWriteBusy() const {
   return millis() < _last_write + BLE_WRITE_MIN_INTERVAL;   // still too soon to start another write?
@@ -218,15 +225,13 @@ size_t SerialBLEInterface::checkRecvFrame(uint8_t dest[]) {
     && millis() >= _last_write + BLE_WRITE_MIN_INTERVAL    // space the writes apart
   ) {
     _last_write = millis();
-    pTxCharacteristic->setValue(send_queue[0].buf, send_queue[0].len);
+    pTxCharacteristic->setValue(send_queue[send_queue_head].buf, send_queue[send_queue_head].len);
     pTxCharacteristic->notify();
 
-    BLE_DEBUG_PRINTLN("writeBytes: sz=%d, hdr=%d", (uint32_t)send_queue[0].len, (uint32_t) send_queue[0].buf[0]);
+    BLE_DEBUG_PRINTLN("writeBytes: sz=%d, hdr=%d", (uint32_t)send_queue[send_queue_head].len, (uint32_t) send_queue[send_queue_head].buf[0]);
 
+    send_queue_head = (send_queue_head + 1) % FRAME_QUEUE_SIZE; // O(1) dequeue
     send_queue_len--;
-    for (int i = 0; i < send_queue_len; i++) {   // delete top item from queue
-      send_queue[i] = send_queue[i + 1];
-    }
   }
 
   Frame frame;

@@ -2,6 +2,10 @@
 #include <esp_task_wdt.h>
 #include <target.h>
 
+#ifndef PIN_SDCARD_CS
+#define PIN_SDCARD_CS 7
+#endif
+
 void NMEPD420Board::begin() {
   ESP32Board::begin();
 
@@ -53,6 +57,19 @@ void NMEPD420Board::begin() {
       }
     }
     rtc_gpio_hold_dis((gpio_num_t)P_LORA_NSS);
+    rtc_gpio_hold_dis((gpio_num_t)PIN_SDCARD_CS);
+    #ifdef AHTX0_POWER_PIN
+    rtc_gpio_hold_dis((gpio_num_t)AHTX0_POWER_PIN);
+    #endif
+    #ifdef PIN_ADC_CTRL
+    rtc_gpio_hold_dis((gpio_num_t)PIN_ADC_CTRL);
+    #endif
+    #ifdef PIN_AMP_ENABLE
+    rtc_gpio_hold_dis((gpio_num_t)PIN_AMP_ENABLE);
+    #endif
+    #ifdef PIN_ES8311_POWER
+    rtc_gpio_hold_dis((gpio_num_t)PIN_ES8311_POWER);
+    #endif
     #ifdef P_LORA_DIO_1
     rtc_gpio_deinit((gpio_num_t)P_LORA_DIO_1);
     #endif
@@ -60,26 +77,23 @@ void NMEPD420Board::begin() {
     rtc_gpio_deinit((gpio_num_t)PIN_BOOT_BTN);
     #endif
   }
+
+  // Keep shared HSPI MicroSD CS (GPIO 7) de-asserted HIGH so an inserted SD card never collides with SX1262 LoRa
+  pinMode(PIN_SDCARD_CS, OUTPUT);
+  digitalWrite(PIN_SDCARD_CS, HIGH);
 }
 
-uint16_t NMEPD420Board::getBattMilliVolts() {
-  #ifdef PIN_ADC_CTRL
-  pinMode(PIN_ADC_CTRL, OUTPUT);
-  digitalWrite(PIN_ADC_CTRL, HIGH);
-  // Settle divider and decoupling RC filter (20 ms required per hardware validation)
-  delay(20);
-  #endif
-
+uint16_t NMEPD420Board::sampleBattAdc() {
   analogReadResolution(12);
   // ESP32-S3 ordering trap: attach pin with a throwaway read before configuring pin attenuation
   (void)analogReadMilliVolts(BATTERY_PIN);
   analogSetPinAttenuation(BATTERY_PIN, ADC_11db);
 
-  // Average 8 samples with 1 ms gap to filter out RF ripple and power supply noise
+  // Average 8 samples with 150 us gap to filter out RF ripple and power supply noise without blocking FreeRTOS
   uint32_t sum = 0;
   for (uint8_t i = 0; i < 8; i++) {
     sum += analogReadMilliVolts(BATTERY_PIN);
-    delay(1);
+    delayMicroseconds(150);
   }
 
   #ifdef PIN_ADC_CTRL
@@ -88,6 +102,54 @@ uint16_t NMEPD420Board::getBattMilliVolts() {
 
   uint32_t pin_mv = sum / 8U;
   return static_cast<uint16_t>(pin_mv * ADC_MULTIPLIER);
+}
+
+uint16_t NMEPD420Board::getBattMilliVolts() {
+  // Cold start: perform one synchronous read so initial boot UI has valid battery telemetry immediately
+  if (_cached_batt_mv == 0) {
+    _cached_batt_mv = readRawBattMilliVolts();
+    _last_batt_read_ms = millis();
+    _adc_settling = false;
+    return _cached_batt_mv;
+  }
+
+  unsigned long now = millis();
+  if (_adc_settling) {
+    if (now - _adc_settle_start_ms >= BATT_SETTLE_MS) {
+      _cached_batt_mv = sampleBattAdc();
+      _last_batt_read_ms = now;
+      _adc_settling = false;
+    }
+    return _cached_batt_mv;
+  }
+
+  if (now - _last_batt_read_ms < BATT_CACHE_TTL_MS) {
+    return _cached_batt_mv;
+  }
+
+  // TTL expired: start non-blocking 20ms RC divider settle phase and return cached value immediately
+  #ifdef PIN_ADC_CTRL
+  pinMode(PIN_ADC_CTRL, OUTPUT);
+  digitalWrite(PIN_ADC_CTRL, HIGH);
+  _adc_settle_start_ms = now;
+  _adc_settling = true;
+  return _cached_batt_mv;
+  #else
+  _cached_batt_mv = sampleBattAdc();
+  _last_batt_read_ms = now;
+  return _cached_batt_mv;
+  #endif
+}
+
+uint16_t NMEPD420Board::readRawBattMilliVolts() {
+  #ifdef PIN_ADC_CTRL
+  pinMode(PIN_ADC_CTRL, OUTPUT);
+  digitalWrite(PIN_ADC_CTRL, HIGH);
+  // Settle divider and decoupling RC filter (20 ms required per hardware validation)
+  delay(BATT_SETTLE_MS);
+  #endif
+
+  return sampleBattAdc();
 }
 
 struct LipoPoint {
@@ -121,7 +183,10 @@ uint8_t NMEPD420Board::estimateLipoPercentage(uint16_t milliVolts) {
       uint16_t v_low  = LIPO_TABLE[i + 1].mv;
       uint8_t  p_high = LIPO_TABLE[i].pct;
       uint8_t  p_low  = LIPO_TABLE[i + 1].pct;
-      return p_low + static_cast<uint8_t>(((uint32_t)(milliVolts - v_low) * (p_high - p_low)) / (v_high - v_low));
+      uint32_t num = (uint32_t)(milliVolts - v_low) * (p_high - p_low);
+      uint32_t den = (uint32_t)(v_high - v_low);
+      uint8_t pct = p_low + static_cast<uint8_t>((num + (den / 2U)) / den);
+      return pct > 100 ? 100 : pct;
     }
   }
   return 0;
@@ -143,18 +208,22 @@ void NMEPD420Board::enterDeepSleep(uint32_t secs) {
   // 1. Power off board peripherals and sensors to eliminate idle current leakage
   #ifdef AHTX0_POWER_PIN
   digitalWrite(AHTX0_POWER_PIN, LOW);
+  rtc_gpio_hold_en((gpio_num_t)AHTX0_POWER_PIN);
   #endif
 
   #ifdef PIN_ADC_CTRL
   digitalWrite(PIN_ADC_CTRL, LOW);
+  rtc_gpio_hold_en((gpio_num_t)PIN_ADC_CTRL);
   #endif
 
   #ifdef PIN_AMP_ENABLE
   digitalWrite(PIN_AMP_ENABLE, LOW);
+  rtc_gpio_hold_en((gpio_num_t)PIN_AMP_ENABLE);
   #endif
 
   #ifdef PIN_ES8311_POWER
   digitalWrite(PIN_ES8311_POWER, LOW);
+  rtc_gpio_hold_en((gpio_num_t)PIN_ES8311_POWER);
   #endif
 
   // 2. Shut down E-Paper display (bistable panel holds image indefinitely with 0 power)
@@ -162,10 +231,12 @@ void NMEPD420Board::enterDeepSleep(uint32_t secs) {
   display.turnOff();
   #endif
 
-  // 3. Power off LoRa modem, latch NSS HIGH via RTC hold
+  // 3. Power off LoRa modem, latch NSS and shared HSPI SD_CS HIGH via RTC hold
   radio_driver.powerOff();
   digitalWrite(P_LORA_NSS, HIGH);
   rtc_gpio_hold_en((gpio_num_t)P_LORA_NSS);
+  digitalWrite(PIN_SDCARD_CS, HIGH);
+  rtc_gpio_hold_en((gpio_num_t)PIN_SDCARD_CS);
 
   // 4. Power off GPS if active
   if (sensors.getLocationProvider() != NULL) {

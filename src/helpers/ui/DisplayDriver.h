@@ -23,6 +23,7 @@ public:
 
   virtual bool isOn() = 0;
   virtual bool isEink() { return false; } // default to non-eink, override in eink drivers
+  virtual bool isBusy() { return false; } // true while asynchronous display refresh is in progress
   virtual void turnOn() = 0;
   virtual void turnOff() = 0;
   virtual void clear() = 0;
@@ -68,6 +69,24 @@ public:
           dest[j++] = c;
         } else if (c == '\n' || c == '\r' || c == '\t') {
           dest[j++] = c;
+        }
+      } else if (c == 0xC2) {
+        if (!src[i+1]) break;
+        unsigned char c2 = (unsigned char)src[++i];
+        switch (c2) {
+          case 0xA0: dest[j++] = ' '; break; // non-breaking space
+          case 0xAB: case 0xBB: dest[j++] = '"'; break; // « »
+          case 0xB0: dest[j++] = ' '; break; // ° (degree sign)
+          case 0xB1:
+            dest[j++] = '+';
+            if (j < dest_size - 1) dest[j++] = '-';
+            break; // ±
+          case 0xB2: dest[j++] = '2'; break; // ²
+          case 0xB3: dest[j++] = '3'; break; // ³
+          case 0xB4: dest[j++] = '\''; break; // ´
+          case 0xB5: dest[j++] = 'u'; break; // µ
+          case 0xB7: dest[j++] = '.'; break; // ·
+          default: dest[j++] = '?'; break;
         }
       } else if (c == 0xC3) {
         if (!src[i+1]) break;
@@ -153,7 +172,10 @@ public:
             case 0x98: case 0x99: case 0x9A: dest[j++] = '\''; break; // ‘ ’ ‚
             case 0x9C: case 0x9D: case 0x9E: dest[j++] = '"'; break;  // “ ” „
             case 0x93: case 0x94: dest[j++] = '-'; break;             // – —
-            case 0xA6: dest[j++] = '.'; break;                        // …
+            case 0xA2: dest[j++] = '*'; break;                        // •
+            case 0xA6:
+              for (int k = 0; k < 3 && j < dest_size - 1; k++) dest[j++] = '.';
+              break;                                                  // …
             default: dest[j++] = ' '; break;
           }
         } else {
@@ -183,13 +205,14 @@ public:
 #endif
   }
   
-  // draw text with ellipsis if it exceeds max_width
+  // draw text with ellipsis if it exceeds max_width (O(log K) binary search truncation)
   virtual void drawTextEllipsized(int x, int y, int max_width, const char* str) {
-    char temp_str[256];  // reasonable buffer size
+    if (!str || max_width <= 0) return;
+    char temp_str[256];
     size_t len = strlen(str);
-    if (len >= sizeof(temp_str)) len = sizeof(temp_str) - 1;
+    if (len >= sizeof(temp_str) - 5) len = sizeof(temp_str) - 5;
     memcpy(temp_str, str, len);
-    temp_str[len] = 0;
+    temp_str[len] = '\0';
     
     if (getTextWidth(temp_str) <= max_width) {
       setCursor(x, y);
@@ -197,24 +220,34 @@ public:
       return;
     }
     
-    // for variable-width fonts (GxEPD), add space after ellipsis
-    // for fixed-width fonts (OLED), keep tight spacing to save precious characters
-    const char* ellipsis;
-    // use a simple heuristic: if 'i' and 'l' have different widths, it's variable-width
-    int i_width = getTextWidth("i");
-    int l_width = getTextWidth("l");
-    if (i_width != l_width) {
-      ellipsis = "... ";  // variable-width fonts: add space
-    } else {
-      ellipsis = "...";   // fixed-width fonts: no space
-    }
-    
+    const char* ellipsis = (getTextWidth("i") != getTextWidth("l")) ? "... " : "...";
     int ellipsis_width = getTextWidth(ellipsis);
-    int str_len = strlen(temp_str);
-    
-    while (str_len > 0 && getTextWidth(temp_str) > max_width - ellipsis_width) {
-      temp_str[--str_len] = 0;
+    int target_width = max_width - ellipsis_width;
+    if (target_width <= 0) {
+      setCursor(x, y);
+      print(ellipsis);
+      return;
     }
+
+    // Binary search for the longest prefix fitting within target_width
+    int low = 0;
+    int high = (int)len;
+    int best = 0;
+    while (low <= high) {
+      int mid = (low + high) / 2;
+      char saved = temp_str[mid];
+      temp_str[mid] = '\0';
+      int w = getTextWidth(temp_str);
+      temp_str[mid] = saved;
+      if (w <= target_width) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    temp_str[best] = '\0';
     strcat(temp_str, ellipsis);
     
     setCursor(x, y);

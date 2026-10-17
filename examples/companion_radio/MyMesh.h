@@ -243,7 +243,8 @@ private:
     bool isChannelMsg() const;
   };
   int offline_queue_len;
-  Frame offline_queue[OFFLINE_QUEUE_SIZE];
+  int offline_queue_head;
+  Frame* offline_queue;
 
   struct AckTableEntry {
     unsigned long msg_sent;

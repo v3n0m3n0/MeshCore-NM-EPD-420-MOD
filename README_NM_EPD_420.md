@@ -54,6 +54,20 @@ This repository is an optimized, hardware-verified modification of [MeshCore](ht
 * When the paired phone is connected via BLE, incoming messages are immediately streamed to the mobile client via `PUSH_CODE_MSG_WAITING` and `CMD_SYNC_NEXT_MESSAGE`, draining the radio's offline queue to 0 in ~20 ms.
 * When the phone is disconnected, the device queues incoming messages in local memory and increments `MSG: %d` until reconnected.
 
+### 7. Performance, Concurrency & UX Optimizations (rev0.2 / rev0.3)
+* **Asynchronous Core 0 E-Paper Refresh Engine & 16 MHz FSPI:** Offloaded blocking `GxEPD2` screen updates (~600 ms partial / ~2.2s full) to a dedicated FreeRTOS task pinned to Core 0 and increased the FSPI clock from 4 MHz to 16 MHz. The main application loop (`the_mesh`, BLE, and button polling) runs with zero display-induced blocking (<1 ms frame commit).
+* **Two-Stage Non-Blocking Battery ADC & AHT20 Warmup State Machines:** Replaced synchronous `delay(20)` ADC divider settling and `delay(50)` AHT20 power-gate warmup delays with `millis()`-driven state machines and 15s/20s TTL caches.
+* **Shared HSPI Bus MicroSD Guard (`PIN_SDCARD_CS` IO7):** Explicitly drives and RTC-latches `SD_CS` (GPIO 7) HIGH across active and deep-sleep states so an inserted MicroSD card never contends with the SX1262 LoRa transceiver on the shared HSPI bus.
+* **$O(1)$ Circular Ring Buffers & PSRAM Queue Allocation:** Converted `offline_queue` (256 frames, allocated in 8 MB Octal PSRAM to free ~44.5 KB of internal SRAM) and `SerialBLEInterface::send_queue` (expanded 4x from 4 to 16 frames) from $O(N)$ shifting arrays to $O(1)$ ring buffers.
+* **$O(\log K)$ Binary-Search Text Ellipsizing & Extended UTF-8 Symbols:** Replaced character-by-character width probing in `drawTextEllipsized()` with binary search and added `0xC2` symbol transliteration (`°`, `±`, `²`, `³`, `µ`, `·`, NBSP).
+* **Bidirectional Unread Message Navigation & `X/Y` Pagination:** Added `Unread: X/Y` position counter on `MsgPreviewScreen`, mapped single-click `USER` (`KEY_PREV`) to step backward to newer messages (instead of wiping the queue), and added on-screen visual feedback during the 5-second `USER` button hardware factory reset.
+* **80 MHz Low-Power MCU Tuning & Deep Sleep RTC GPIO Hold:** Lowered default CPU clock from 240 MHz to 80 MHz (~60% active MCU current reduction), added FreeRTOS idle yield, and latched peripheral power gates (`IO40`, `IO43`, `IO41`, `IO44`) LOW in deep sleep.
+* **Hardware Anti-Ghosting on Demand & RF Noise Floor Quantization:** Double-clicking `USER` (IO45) forces a full E-Paper refresh; quantized SX1262 noise floor to 3 dBm steps on the RADIO page.
+
+### 8. Future Optimization Backlog
+* **I2S Audio Notification Synthesizer (ES8311 + NS4150B):** Implement a lightweight zero-idle-drain I2S tone generator driving the onboard ES8311 codec (`0x18`, `CODEC_EN` IO44) and NS4150B amplifier (`PA_CTRL` IO41) for audible message alerts (`UITask::notify()`).
+* **Filesystem Migration (`SPIFFS` -> `LittleFS`):** Migrate `DataStore` storage on ESP32 from deprecated `SPIFFS` to `LittleFS` for faster contact/blob I/O, superior wear-leveling, and power-loss resilience (with an automated one-time migration path for existing `/contacts` and identity files).
+
 ---
 
 ## Pin Mapping Summary
