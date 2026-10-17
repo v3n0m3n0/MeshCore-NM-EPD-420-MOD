@@ -1,17 +1,20 @@
 # RockBase NM-EPD-420 MOD — MeshCore Companion BLE
 
 > [!NOTE]
-> **Custom Hardware & Firmware MOD (`v1.17.1-mod-rev0.1`)**  
+> **Custom Hardware & Firmware MOD (`v1.17.1-mod-rev0.3`)**  
 > This repository is an optimized modification of MeshCore Companion BLE for the **RockBase NM-EPD-420-BW** board (ESP32-S3 + 4.2" 400×300 B/W E-Paper + SX1262 LoRa).
 >
-> **What makes this a MOD:**
-> * **Display:** Native 400×300 layout (zero margins), dynamic vertical centering, and instant display controller power-down.
-> * **Power Hygiene:** Hardware deep-sleep wake via `BOOT` button (IO0) or LoRa packet (`DIO1`), with zero peripheral power leakage.
-> * **Sensors:** Live AHT20 (temp/humidity) and 12-point LiPo battery OCV curve telemetry on Home & Radio pages (600s interval).
-> * **Reliability:** TWDT 15s watchdog guard, 5s BLE bond wipe via `USER` button, UTF-8 safety, and full 160-char message preview.
+> **What makes this a MOD (`rev0.3`):**
+> * **Asynchronous Display & 16 MHz FSPI:** FSPI clock boosted to 16 MHz; e-paper updates offloaded to a dedicated FreeRTOS task on Core 0 (`epdRefreshTask`), making `endFrame()` non-blocking (<1 ms) with zero UI freeze.
+> * **8 MB Octal PSRAM Dynamic Buffers:** `offline_queue` (256 frames, ~44.5 KB) dynamically allocated in external SPIRAM with an $O(1)$ ring buffer, saving ~44.5 KB internal SRAM for BLE stack stability.
+> * **Non-Blocking Sensor & Battery State Machines:** Eliminated blocking `delay()` calls for AHT20 warmup (IO40) and battery ADC settling (IO43) via cooperative timer state machines.
+> * **Shared HSPI Bus Safety:** MicroSD CS (`PIN_SDCARD_CS` IO7) driven HIGH and RTC-latched in deep sleep to prevent SPI contention with the SX1262 LoRa radio.
+> * **BLE Reliability:** Expanded BLE send queue to 16 frames with circular buffer management to eliminate packet drops on reconnect.
+> * **Display & Power Hygiene:** Native 400×300 layout, deep-sleep wake via `BOOT` (IO0) or LoRa packet (`DIO1`), and instant display power-off.
+> * **UX Enhancements:** Unread message pagination (`Unread: X/Y`), bidirectional message navigation, $O(\log K)$ text ellipsization, and visual progress bar for 5s hardware factory reset.
 >
-> 🚀 **1-Click Flasher & Binaries:** [Download Release v1.17.1-mod-rev0.1](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-v1.17.1-Companion-BLE-MOD/releases/tag/v1.17.1-mod-rev0.1)  
-> 📄 **Changelog & Technical Specs:** [RELEASE_NOTES.md](RELEASE_NOTES.md) | [README_NM_EPD_420.md](README_NM_EPD_420.md)
+> 🚀 **1-Click Flasher & Binaries:** [Download Release v1.17.1-mod-rev0.3](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-v1.17.1-Companion-BLE-MOD/releases/tag/v1.17.1-mod-rev0.3)  
+> 📄 **Changelog & Technical Specs:** [RELEASE_NOTES.md](RELEASE_NOTES.md) | [README_NM_EPD_420.md](README_NM_EPD_420.md) | [release/README.md](release/README.md)
 
 ---
 
