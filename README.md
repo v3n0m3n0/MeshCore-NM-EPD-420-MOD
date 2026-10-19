@@ -1,10 +1,11 @@
 # RockBase NM-EPD-420 MOD — MeshCore Companion BLE
 
 > [!NOTE]
-> **Custom Hardware & Firmware MOD (`v1.17.1-mod-rev0.3`)**  
-> This repository is an optimized modification of MeshCore Companion BLE for the **RockBase NM-EPD-420-BW** board (ESP32-S3 + 4.2" 400×300 B/W E-Paper + SX1262 LoRa).
+> **Custom Hardware & Firmware MOD (`v1.18.0-mod-rev0.1`)**  
+> This repository is an optimized modification of MeshCore Companion BLE for the **RockBase NM-EPD-420-BW** board (ESP32-S3 + 4.2" 400×300 B/W E-Paper + SX1262 LoRa), updated to upstream **MeshCore v1.18.0**.
 >
-> **What makes this a MOD (`rev0.3`):**
+> **What makes this a MOD (`rev0.1` on v1.18.0):**
+> * **Upstream v1.18.0 Integration:** Protocol v14 support, Companion CLI (`CMD_RUN_CLI_COMMAND`), zero-hop Node Discover UI (`HomePage::DISCOVERY`), dynamic WiFi, and decoupled `MyMesh::Listener` architecture.
 > * **Asynchronous Display & 16 MHz FSPI:** FSPI clock boosted to 16 MHz; e-paper updates offloaded to a dedicated FreeRTOS task on Core 0 (`epdRefreshTask`), making `endFrame()` non-blocking (<1 ms) with zero UI freeze.
 > * **8 MB Octal PSRAM Dynamic Buffers:** `offline_queue` (256 frames, ~44.5 KB) dynamically allocated in external SPIRAM with an $O(1)$ ring buffer, saving ~44.5 KB internal SRAM for BLE stack stability.
 > * **Non-Blocking Sensor & Battery State Machines:** Eliminated blocking `delay()` calls for AHT20 warmup (IO40) and battery ADC settling (IO43) via cooperative timer state machines.
@@ -13,7 +14,7 @@
 > * **Display & Power Hygiene:** Native 400×300 layout, deep-sleep wake via `BOOT` (IO0) or LoRa packet (`DIO1`), and instant display power-off.
 > * **UX Enhancements:** Unread message pagination (`Unread: X/Y`), bidirectional message navigation, $O(\log K)$ text ellipsization, and visual progress bar for 5s hardware factory reset.
 >
-> 🚀 **1-Click Flasher & Binaries:** [Download Release v1.17.1-mod-rev0.3](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-v1.17.1-Companion-BLE-MOD/releases/tag/v1.17.1-mod-rev0.3)  
+> 🚀 **1-Click Flasher & Binaries:** Available in [`release/`](release/) (`MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.1.bin`)  
 > 📄 **Changelog & Technical Specs:** [RELEASE_NOTES.md](RELEASE_NOTES.md) | [README_NM_EPD_420.md](README_NM_EPD_420.md) | [release/README.md](release/README.md)
 
 ---

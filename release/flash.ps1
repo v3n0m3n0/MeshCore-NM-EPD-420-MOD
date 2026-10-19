@@ -43,7 +43,7 @@ $binCandidates = Get-ChildItem -Path $PSScriptRoot -Filter "MeshCore-NM-EPD-420-
 if ($binCandidates) {
     $firmwareFile = $binCandidates[0].FullName
 } else {
-    $firmwareFile = Join-Path $PSScriptRoot "MeshCore-NM-EPD-420-BW-v1.17.1-mod-rev0.1.bin"
+    $firmwareFile = Join-Path $PSScriptRoot "MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.1.bin"
 }
 
 if (-not (Test-Path $firmwareFile)) {

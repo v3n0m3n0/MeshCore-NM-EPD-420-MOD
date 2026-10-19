@@ -113,7 +113,12 @@ class HomeScreen : public UIScreen {
 #if UI_SENSORS_PAGE == 1
     SENSORS,
 #endif
+#if UI_DISCOVER_SCREEN
+    DISCOVERY,
+#endif
+#ifndef UI_NO_HIBERNATE
     SHUTDOWN,
+#endif
     Count    // keep as last
   };
 
@@ -124,6 +129,13 @@ class HomeScreen : public UIScreen {
   uint8_t _page;
   bool _shutdown_init;
   AdvertPath recent[UI_RECENT_LIST_SIZE];
+#if UI_DISCOVER_SCREEN
+  DiscoveredNode discovered[DISCOVERED_NODES_TABLE_SIZE]; // not circular, latest discovered nodes are not kept
+  uint32_t disc_node_req_tag = 0;
+  uint32_t disc_nodes_count = 0;
+  uint32_t discovery_req_time = 0;
+  bool discovery_disp_names = true; // by default display names if available (removes SNR_O)
+#endif
 
 
   void renderBatteryIndicator(DisplayDriver& display, uint16_t batteryMilliVolts) {
@@ -230,6 +242,40 @@ public:
      : _task(task), _rtc(rtc), _sensors(sensors), _node_prefs(node_prefs), _page(0),
        _shutdown_init(false), sensors_lpp(200) {  }
 
+#if UI_DISCOVER_SCREEN
+  bool sendDiscoverRequest() {
+    uint8_t cmd_bytes[6];
+    cmd_bytes[0] = CTL_TYPE_NODE_DISCOVER_REQ | 1; // DISCOVER_REQ | prefix only
+    cmd_bytes[1] = 0xFF;     // Repeaters
+    the_mesh.getRNG()->random((uint8_t *) &disc_node_req_tag, 4);  // generate random tag
+    memcpy(&cmd_bytes[2], &disc_node_req_tag, 4);
+    disc_nodes_count = 0;
+    mesh::Packet* req = the_mesh.createControlData(cmd_bytes, sizeof(cmd_bytes));
+    if (req) {
+      the_mesh.sendZeroHop(req);
+      discovery_req_time = millis();
+      return true;
+    }
+    return false;
+  }
+
+  void handleDiscoverResponse(const mesh::Packet* packet) {
+    if (disc_nodes_count < DISCOVERED_NODES_TABLE_SIZE && memcmp(&packet->payload[2], &disc_node_req_tag, 4) == 0) {
+      auto d = &discovered[disc_nodes_count++];
+      memcpy(d->pubkey_prefix, &packet->payload[6], 8);
+      d->type = packet->payload[0] & 0xF;
+      d->snr_out = ((int8_t)packet->payload[1]) / 4.0;
+      d->snr_in = radio_driver.getLastSNR();
+      ContactInfo* c = the_mesh.lookupContactByPubKey(&packet->payload[6], 8);
+      if (c != NULL) {
+        strncpy(d->name, c->name, 32);
+      } else {
+        d->name[0] = 0;
+      }
+    }
+  }
+#endif
+
   void poll() override {
     if (_shutdown_init && !_task->isButtonPressed()) {  // must wait for USR button to be released
       _task->shutdown();
@@ -294,11 +340,13 @@ public:
         display.drawTextCentered(display.width() / 2, 74 + dy, tmp);
       }
 
-      #ifdef WIFI_SSID
-        IPAddress ip = WiFi.localIP();
-        snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-        display.setTextSize(1);
-        display.drawTextCentered(display.width() / 2, 96 + dy, tmp);
+      #if defined(ENABLE_WIFI_INTERFACE) || defined(WIFI_SSID)
+        if (_node_prefs->wifi_enabled == 1) {
+          IPAddress ip = WiFi.localIP();
+          snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+          display.setTextSize(1);
+          display.drawTextCentered(display.width() / 2, 96 + dy, tmp);
+        }
       #endif
     } else if (_page == HomePage::RECENT) {
       the_mesh.getRecentlyHeard(recent, UI_RECENT_LIST_SIZE);
@@ -566,6 +614,50 @@ public:
       if (sensors_scroll) sensors_scroll_offset = (sensors_scroll_offset+1)%sensors_nb;
       else sensors_scroll_offset = 0;
 #endif
+#if UI_DISCOVER_SCREEN
+    } else if (_page == HomePage::DISCOVERY) {
+      int count = disc_nodes_count;
+      display.setColor(UIColor::primary_txt);
+#if defined(NM_EPD_420_BW)
+      const int row_step = 14;
+#else
+      const int row_step = 11;
+#endif
+      int y = 20;
+      for (int i = 0; i < count; i++, y += row_step) {
+        char name[32];
+        auto a = &discovered[i];
+        if ((a->name[0] == 0) || !discovery_disp_names) {
+          mesh::Utils::toHex(name, a->pubkey_prefix, 4);
+        } else {
+          strncpy(name, a->name, 32);
+        }
+        char filtered_name[sizeof(name)];
+        char snr_s[12];
+        if (strlen(name) <= 8) { // display snr_o
+          sprintf(snr_s, "%02.1f>%02.1f", a->snr_out, a->snr_in);
+        } else {
+          sprintf(snr_s, "%02.1f", a->snr_in);
+        }
+        int snr_width = display.getTextWidth(snr_s);
+        int max_name_width = display.width() - snr_width - 1;
+        display.translateUTF8ToBlocks(filtered_name, name, sizeof(filtered_name));
+        display.drawTextEllipsized(0, y, max_name_width, filtered_name);
+        display.setCursor(display.width() - snr_width - 1, y);
+        display.print(snr_s);
+      }
+      if (millis() < discovery_req_time + 5000) {
+        return 1000; // more frequent updates just after req
+      } else if (count < DISCOVERED_NODES_TABLE_SIZE - 1) { // show prompt if list not full
+#if defined(NM_EPD_420_BW)
+        y = display.height() - 16;
+#else
+        y = 10 + 11 * DISCOVERED_NODES_TABLE_SIZE;
+#endif
+        display.drawTextCentered(display.width() / 2, y, "discover: " PRESS_LABEL);
+      }
+#endif
+#ifndef UI_NO_HIBERNATE
     } else if (_page == HomePage::SHUTDOWN) {
       display.setColor(UIColor::corp_blue);
       display.setTextSize(1);
@@ -587,6 +679,7 @@ public:
 #endif
       }
     }
+#endif
 #if defined(NM_EPD_420_BW)
     return 30000;  // next render after 30000 ms (30s idle on E-Paper)
 #else
@@ -604,6 +697,11 @@ public:
       if (_page == HomePage::RECENT) {
         _task->showAlert("Recent adverts", 800);
       }
+#if UI_DISCOVER_SCREEN
+      if (_page == HomePage::DISCOVERY) {
+        _task->showAlert("Repeater disc", 800);
+      }
+#endif
       return true;
     }
     if (c == KEY_ENTER && _page == HomePage::BLUETOOTH) {
@@ -644,10 +742,24 @@ public:
       return true;
     }
 #endif
+#if UI_DISCOVER_SCREEN
+    if (c == KEY_ENTER && _page == HomePage::DISCOVERY) {
+      if (millis() > discovery_req_time + 5000) { // rate limiter
+        sendDiscoverRequest();
+      }
+      return true;
+    }
+    if (c == KEY_SELECT && _page == HomePage::DISCOVERY) {
+      discovery_disp_names = !discovery_disp_names;
+      return true;
+    }
+#endif
+#ifndef UI_NO_HIBERNATE
     if (c == KEY_ENTER && _page == HomePage::SHUTDOWN) {
       _shutdown_init = true;  // need to wait for button to be released
       return true;
     }
+#endif
     return false;
   }
 };
@@ -874,17 +986,9 @@ switch(t){
 }
 
 
-void UITask::msgRead(int msgcount) {
-  _msgcount = msgcount;
-  if (msgcount == 0) {
-    gotoHomeScreen();
-  }
-}
-
-void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount) {
-  _msgcount = msgcount;
-
-  ((MsgPreviewScreen *) msg_preview)->addPreview(path_len, from_name, text);
+void UITask::onMessageRecv(mesh::Packet *pkt, const ContactInfo &from, uint8_t txt_type, uint32_t sender_timestamp, const char* text) {
+  uint8_t path_len = pkt->isRouteFlood() ? pkt->path_len : 0xFF;
+  ((MsgPreviewScreen *) msg_preview)->addPreview(path_len, from.name, text);
   setCurrScreen(msg_preview);
 
   if (_display != NULL) {
@@ -892,10 +996,55 @@ void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, i
       _display->turnOn();
     }
     if (_display->isOn()) {
-    _auto_off = millis() + AUTO_OFF_MILLIS;  // extend the auto-off timer
-    _next_refresh = 100;  // trigger refresh
+      _auto_off = millis() + AUTO_OFF_MILLIS;  // extend the auto-off timer
+      _next_refresh = 100;  // trigger refresh
     }
   }
+
+  if (!hasConnection()) {
+    notify(UIEventType::contactMessage);
+  }
+}
+
+void UITask::onChannelMessageRecv(mesh::Packet *pkt, ChannelDetails& channel_details, const char* text) {
+  uint8_t path_len = pkt->isRouteFlood() ? pkt->path_len : 0xFF;
+  ((MsgPreviewScreen *) msg_preview)->addPreview(path_len, channel_details.name, text);
+  setCurrScreen(msg_preview);
+
+  if (_display != NULL) {
+    if (!_display->isOn() && !hasConnection()) {
+      _display->turnOn();
+    }
+    if (_display->isOn()) {
+      _auto_off = millis() + AUTO_OFF_MILLIS;  // extend the auto-off timer
+      _next_refresh = 100;  // trigger refresh
+    }
+  }
+
+  if (!hasConnection()) {
+    notify(UIEventType::channelMessage);
+  }
+}
+
+void UITask::onQueueSizeChanged(int msgcount) {
+  _msgcount = msgcount;
+  if (msgcount == 0) {
+    gotoHomeScreen();
+  }
+}
+
+void UITask::onDiscoveredContact(ContactInfo &contact, bool is_new, uint8_t path_len, const uint8_t* path) {
+  if (!hasConnection()) {
+    notify(UIEventType::newContactMessage);
+  }
+}
+
+void UITask::onControlDataRecv(const mesh::Packet* packet) {
+#if UI_DISCOVER_SCREEN
+  if (packet->payload_len >= 14 && (packet->payload[0] & 0xF0) == CTL_TYPE_NODE_DISCOVER_RESP) {
+    ((HomeScreen *) home)->handleDiscoverResponse(packet);
+  }
+#endif
 }
 
 void UITask::userLedHandler() {

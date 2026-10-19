@@ -21,8 +21,8 @@ if "%PORT%"=="" (
 set "BINFILE="
 for /f "delims=" %%f in ('dir /b /o:n "%~dp0MeshCore-NM-EPD-420-BW-*-mod-rev*.bin" 2^>nul') do set "BINFILE=%%f"
 if "%BINFILE%"=="" (
-    if exist "%~dp0MeshCore-NM-EPD-420-BW-v1.17.1-mod-rev0.1.bin" (
-        set "BINFILE=MeshCore-NM-EPD-420-BW-v1.17.1-mod-rev0.1.bin"
+    if exist "%~dp0MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.1.bin" (
+        set "BINFILE=MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.1.bin"
     ) else (
         echo [ERROR] No MeshCore revision binary found in %~dp0
         pause

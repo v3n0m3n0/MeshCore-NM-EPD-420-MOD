@@ -1,3 +1,25 @@
+# MeshCore-NM-EPD-420-BW v1.18.0-mod-rev0.1 Release Notes
+
+**Target Hardware:** RockBase NM-EPD-420-BW (ESP32-S3R8, 16MB Flash, 8MB Octal PSRAM, 4.2" 400×300 B/W E-Paper SSD1683, Semtech SX1262 LoRa, AHT20 sensor).  
+**Branch:** `nm-epd-420-bw-mod`  
+**Base:** MeshCore Companion Firmware v1.18.0 (`81dbae5`, protocol version 14)  
+**Maintainer:** [@v3n0m3n0](https://github.com/v3n0m3n0)
+
+---
+
+## Executive Summary (v1.18.0-mod-rev0.1)
+
+This release upgrades the custom RockBase NM-EPD-420-BW firmware from MeshCore v1.17.1 to the newly released upstream **MeshCore Companion Firmware v1.18.0**. It incorporates all upstream v1.18.0 protocol changes, interactive CLI command handling, zero-hop node discovery, abstract UI decoupling via `MyMesh::Listener`, and dynamic WiFi support, while fully preserving and verifying every single hardware optimization engineered for the NM-EPD-420 board.
+
+### Highlights:
+- **Upstream v1.18.0 Integration:** Full protocol v14 support including `CMD_RUN_CLI_COMMAND` (CLI over BLE/WiFi/Serial), zero-hop Node Discover UI (`HomePage::DISCOVERY`), and decoupled event listening via `MyMesh::Listener`.
+- **Preserved Core 0 Asynchronous E-Paper Refresh:** 16 MHz FSPI refresh task maintains sub-millisecond frame dispatch with zero CPU blocking on the main thread.
+- **Dynamic WiFi & BLE Support:** Dynamic WiFi interface with auto-reconnect and IP display, compatible with BLE coexistence on ESP32-S3.
+- **8 MB Octal PSRAM Offline Queue:** Large 256-frame offline message buffer in high-speed PSRAM with $O(1)$ ring buffer management.
+- **Hardware Button & Power Management:** 5-second `USER` button factory reset, physical `BOOT` ext0 deep sleep wakeup, and complete peripheral rail isolation.
+
+---
+
 # MeshCore-NM-EPD-420-BW v1.17.1-mod-rev0.3 Release Notes
 
 **Target Hardware:** RockBase NM-EPD-420-BW (ESP32-S3R8, 16MB Flash, 8MB Octal PSRAM, 4.2" 400×300 B/W E-Paper SSD1683, Semtech SX1262 LoRa, AHT20 sensor).  

@@ -1,21 +1,28 @@
-# MeshCore-NM-EPD-420-BW v1.17.1-mod-rev0.3 Firmware Release
+# MeshCore-NM-EPD-420-BW v1.18.0-mod-rev0.1 Firmware Release
 
 This directory contains pre-compiled, hardware-verified binaries for the **RockBase NM-EPD-420-BW** board (ESP32-S3R8 + 4.2" E-Paper + SX1262 LoRa + AHT20).
 
-### Key Optimizations in rev0.3 (and rev0.2):
+---
+
+### What's New in v1.18.0-mod-rev0.1:
+- **Upstream v1.18.0 Codebase Synchronization:** Merged official MeshCore Companion Firmware v1.18.0 (commit `81dbae5`, protocol version 14).
+- **Interactive Companion CLI (`CMD_RUN_CLI_COMMAND`):** Full support for device querying, configuration inspection, dynamic WiFi management, and rescue CLI operations.
+- **Node Discover Screen (`HomePage::DISCOVERY`):** Zero-hop repeater and node discovery UI integrated into the native 400×300 layout (`row_step = 14`, UTF-8 transliteration, and `discover: press Enter` prompt).
+- **Abstract UI Overhaul (`MyMesh::Listener`):** Migrated UI notifications and message events to the decoupled `MyMesh::Listener` architecture (`onMessageRecv`, `onChannelMessageRecv`, `onQueueSizeChanged`, `onDiscoveredContact`, `onControlDataRecv`).
+- **Dynamic WiFi & BLE Coexistence:** Flexible serial interface manager supporting on-demand WiFi station connectivity, automatic link reconnection, and IP address display on the primary home screen when enabled.
+
+---
+
+### Preserved Hardware Optimizations:
 - **Asynchronous Core 0 FreeRTOS E-Paper Task & 16 MHz FSPI:** Offloaded blocking `GxEPD2` screen updates (~600 ms partial / ~2.2s full) to a dedicated FreeRTOS task on Core 0 and raised FSPI clock from 4 MHz to 16 MHz. Reduces UI frame commit latency on the main thread to <1 ms.
 - **Two-Stage Non-Blocking Battery ADC & AHT20 Warmup State Machines:** Replaced synchronous `delay(20)` ADC settling and `delay(50)` AHT20 power-gate warmup delays with `millis()`-driven state machines.
 - **Shared HSPI MicroSD Guard (`PIN_SDCARD_CS` IO7):** Explicitly drives and RTC-holds `SD_CS` (GPIO 7) HIGH so an inserted MicroSD card never interferes with SX1262 LoRa SPI traffic or leaks current in deep sleep.
 - **$O(1)$ Circular Ring Buffers & Octal PSRAM Allocation:** Converted `MyMesh::offline_queue` (allocated in 8 MB Octal PSRAM, freeing ~44.5 KB of internal SRAM) and `SerialBLEInterface::send_queue` (expanded 4x from 4 to 16 frames) to $O(1)$ circular buffers.
 - **$O(\log K)$ Binary-Search Text Ellipsizing & Extended UTF-8 (`0xC2`):** Replaced linear character stripping in `drawTextEllipsized()` with binary search and added `0xC2` symbol transliteration (`°`, `±`, `²`, `³`, `µ`, `·`, NBSP).
 - **Bidirectional Unread Message Navigation & `X/Y` Pagination:** Added `Unread: X/Y` position counter on `MsgPreviewScreen`, mapped single-click `USER` (`KEY_PREV`) to step backward to newer messages, and added visual screen feedback during the 5-second `USER` button factory reset.
-- **Low Power MCU Tuning & Deep Sleep Pin Latch:** Lowered default CPU clock from 240 MHz to 80 MHz (~60% reduction in MCU active current draw), added FreeRTOS idle yield, and latched all peripheral power gating pins (`IO40`, `IO43`, `IO41`, `IO44`) via `rtc_gpio_hold_en()` in deep sleep.
+- **Low Power MCU Tuning & Deep Sleep Pin Latch:** Lowered default CPU clock from 240 MHz to 80 MHz (~60% reduction in MCU active current draw), added FreeRTOS idle yield (`delay(1)`), and latched all peripheral power gating pins (`IO40`, `IO43`, `IO41`, `IO44`) via `rtc_gpio_hold_en()` in deep sleep.
 - **E-Paper Anti-Ghosting on Demand & Noise Floor Quantization:** Double-click on `USER` (IO45) triggers a full clean refresh cycle; quantized SX1262 noise floor on the RADIO page to 3 dBm steps.
 - **High-Throughput BLE Notifications:** Reduced `BLE_WRITE_MIN_INTERVAL` from 60 ms to 20 ms for faster synchronization with the companion app.
-
-### Future Optimization Backlog:
-- **I2S Audio Notification Synthesizer (ES8311 + NS4150B):** Hardware-gated I2S tone generator (`CODEC_EN` IO44 + `PA_CTRL` IO41) for audible message alerts.
-- **Filesystem Migration (`SPIFFS` -> `LittleFS`):** Transition ESP32 storage backend from `SPIFFS` to `LittleFS` for improved flash wear-leveling and power-loss resilience.
 
 ---
 
@@ -23,11 +30,11 @@ This directory contains pre-compiled, hardware-verified binaries for the **RockB
 
 | File | Size | Flash Offset | Description |
 |---|---|---|---|
-| **`MeshCore-NM-EPD-420-BW-v1.17.1-mod-rev0.3.bin`** | **1.92 MB** | **`0x00000000`** | **Unified image:** Contains bootloader, partition table, boot_app0, and application firmware merged into a single image. **(Recommended)** |
+| **`MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.1.bin`** | **1.96 MB** | **`0x00000000`** | **Unified image:** Contains bootloader, partition table, boot_app0, and application firmware merged into a single image. **(Recommended)** |
 | `bootloader.bin` | 18.8 KB | `0x0000` | ESP32-S3 ROM bootloader (QIO/OPI, 80MHz) |
 | `partitions.bin` | 3.0 KB | `0x8000` | 16 MB custom partition map |
 | `boot_app0.bin` | 8.0 KB | `0xe000` | ESP-IDF OTA data initialization partition |
-| `firmware.bin` | 1.86 MB | `0x10000` | Application firmware |
+| `firmware.bin` | 1.89 MB | `0x10000` | Application firmware |
 
 ---
 
@@ -50,7 +57,7 @@ powershell -ExecutionPolicy Bypass -File .\flash.ps1
 
 ### Single Unified Image (Recommended):
 ```bash
-python -m esptool --port COM15 --baud 921600 --chip esp32s3 write_flash 0x0 MeshCore-NM-EPD-420-BW-v1.17.1-mod-rev0.1.bin
+python -m esptool --port COM15 --baud 921600 --chip esp32s3 write_flash 0x0 MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.1.bin
 ```
 
 ### Separate Partitions:
@@ -74,7 +81,7 @@ python -m esptool --port COM15 --before no-reset --after watchdog-reset flash_id
 
 You can flash this device directly from Chrome/Edge using any web flasher (e.g., [ESP Web Tools](https://esphome.github.io/esp-web-tools/)):
 
-- **File:** `MeshCore-NM-EPD-420-BW-v1.17.1-mod.bin`
+- **File:** `MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.1.bin`
 - **Offset:** `0x0`
 - **Baud Rate:** `921600` or `115200`
 - **Chip:** `ESP32-S3`
