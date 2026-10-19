@@ -1,6 +1,6 @@
-# RockBase NM-EPD-420-BW v1.18.0-mod Companion BLE
+# RockBase NM-EPD-420-BW v1.18.0-mod Firmware Suite
 
-This repository is an optimized, hardware-verified modification of [MeshCore](https://github.com/meshcore-dev/MeshCore) providing full, production-ready support for the **RockBase NM-EPD-420** ESP32-S3 board with a **4.2-inch Black & White E-Paper display (GYE042A87 / SSD1683)** and **Semtech SX1262 LoRa transceiver**.
+This repository is an optimized, hardware-verified modification of [MeshCore](https://github.com/meshcore-dev/MeshCore) providing full, production-ready support for the **RockBase NM-EPD-420** ESP32-S3 board with a **4.2-inch Black & White E-Paper display (GYE042A87 / SSD1683)** and **Semtech SX1262 LoRa transceiver**, compiled across all 5 official roles: **Companion Radio BLE**, **Companion Radio USB**, **Repeater**, **Room Server**, and **KISS Modem**.
 
 ---
 

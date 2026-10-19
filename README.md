@@ -1,21 +1,23 @@
-# RockBase NM-EPD-420 MOD — MeshCore Companion BLE
+# RockBase NM-EPD-420 MOD — MeshCore Firmware Suite (v1.18.0-mod-rev0.1)
 
 > [!NOTE]
-> **Custom Hardware & Firmware MOD (`v1.18.0-mod-rev0.1`)**  
-> This repository is an optimized modification of MeshCore Companion BLE for the **RockBase NM-EPD-420-BW** board (ESP32-S3 + 4.2" 400×300 B/W E-Paper + SX1262 LoRa), updated to upstream **MeshCore v1.18.0**.
->
-> **What makes this a MOD (`rev0.1` on v1.18.0):**
-> * **Upstream v1.18.0 Integration:** Protocol v14 support, Companion CLI (`CMD_RUN_CLI_COMMAND`), zero-hop Node Discover UI (`HomePage::DISCOVERY`), dynamic WiFi, and decoupled `MyMesh::Listener` architecture.
-> * **Asynchronous Display & 16 MHz FSPI:** FSPI clock boosted to 16 MHz; e-paper updates offloaded to a dedicated FreeRTOS task on Core 0 (`epdRefreshTask`), making `endFrame()` non-blocking (<1 ms) with zero UI freeze.
-> * **8 MB Octal PSRAM Dynamic Buffers:** `offline_queue` (256 frames, ~44.5 KB) dynamically allocated in external SPIRAM with an $O(1)$ ring buffer, saving ~44.5 KB internal SRAM for BLE stack stability.
-> * **Non-Blocking Sensor & Battery State Machines:** Eliminated blocking `delay()` calls for AHT20 warmup (IO40) and battery ADC settling (IO43) via cooperative timer state machines.
-> * **Shared HSPI Bus Safety:** MicroSD CS (`PIN_SDCARD_CS` IO7) driven HIGH and RTC-latched in deep sleep to prevent SPI contention with the SX1262 LoRa radio.
-> * **BLE Reliability:** Expanded BLE send queue to 16 frames with circular buffer management to eliminate packet drops on reconnect.
-> * **Display & Power Hygiene:** Native 400×300 layout, deep-sleep wake via `BOOT` (IO0) or LoRa packet (`DIO1`), and instant display power-off.
-> * **UX Enhancements:** Unread message pagination (`Unread: X/Y`), bidirectional message navigation, $O(\log K)$ text ellipsization, and visual progress bar for 5s hardware factory reset.
->
-> 🚀 **1-Click Flasher & Binaries:** Available in [`release/`](release/) (`MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.1.bin`)  
-> 📄 **Changelog & Technical Specs:** [RELEASE_NOTES.md](RELEASE_NOTES.md) | [README_NM_EPD_420.md](README_NM_EPD_420.md) | [release/README.md](release/README.md)
+> **Complete Hardware & Firmware MOD Suite (`v1.18.0-mod-rev0.1`)**  
+> This repository provides an optimized, hardware-verified firmware suite of **MeshCore v1.18.0** for the **RockBase NM-EPD-420-BW** board (ESP32-S3R8 + 4.2" 400×300 B/W E-Paper + SX1262 LoRa + AHT20), with **all 5 official roles** pre-compiled and packaged into unified single-file `0x0` flashable binaries.
+
+### 📦 Available Firmware Roles (-MOD Suite)
+
+All 5 roles share the custom hardware layer (`NMEPD420Board`, `NMEPD420Display`, `NMEPD420EnvironmentSensorManager`, `CommonRadioPrefs`):
+
+| Role | Unified Binary (`0x0`) | Size | Key Capabilities & Hardware Features |
+|---|---|:---:|---|
+| **Companion Radio BLE** | [`MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.1.bin`](release/MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.1.bin)<br>*(alias: `MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.1.bin`)* | 1.96 MB | Mobile App connectivity via BLE, dynamic WiFi station, interactive Companion CLI (`CMD_RUN_CLI_COMMAND`), zero-hop Node Discover UI (`HomePage::DISCOVERY`), 400×300 Core 0 Async E-Paper, 256 offline queue in PSRAM, AHT20 & battery telemetry, 5s factory reset. |
+| **Companion Radio USB** | [`MeshCore-NM-EPD-420-BW-companion_radio_usb-v1.18.0-mod-rev0.1.bin`](release/MeshCore-NM-EPD-420-BW-companion_radio_usb-v1.18.0-mod-rev0.1.bin) | 1.41 MB | Desktop / Laptop companion via USB CDC serial terminal or web app, 400×300 Core 0 Async E-Paper, 256 offline queue in PSRAM, AHT20 & battery telemetry. |
+| **Repeater** | [`MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.1.bin`](release/MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.1.bin) | 1.56 MB | Autonomous field / solar packet repeater, zero-hop neighbour discovery, live repeater statistics on 4.2" E-Paper, low-power 80 MHz MCU, shared HSPI MicroSD CS isolation, TCXO SX1262 (+22 dBm). |
+| **Room Server** | [`MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.1.bin`](release/MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.1.bin) | 1.56 MB | Micro-BBS room server for shared channels and bulletin posts, live statistics on 4.2" E-Paper, zero-hop discovery, low-power 80 MHz MCU, shared HSPI MicroSD CS isolation, TCXO SX1262 (+22 dBm). |
+| **KISS Modem** | [`MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.1.bin`](release/MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.1.bin) | 1.30 MB | Serial KISS TNC bridge for AX.25, APRS, TCP/IP, or Python hosts, headless operation (display disabled), audio PA disabled, low-power 80 MHz MCU, shared HSPI MicroSD CS isolation. |
+
+> 🚀 **1-Click Flasher & Binaries:** Available in [`release/`](release/) (`flash.ps1` / `flash.bat` with interactive role selection)  
+> 📄 **Technical Specs & Full Changelog:** [RELEASE_NOTES.md](RELEASE_NOTES.md) | [README_NM_EPD_420.md](README_NM_EPD_420.md) | [release/README.md](release/README.md)
 
 ---
 
@@ -68,6 +70,27 @@ For developers:
   - [Simple Sensor](./examples/simple_sensor) - Remote sensor node with telemetry and alerting.
 
 The Simple Secure Chat example can be interacted with through the Serial Monitor in Visual Studio Code, or with a Serial USB Terminal on Android.
+
+### 🔨 Building for RockBase NM-EPD-420-BW
+
+To compile any of the 5 roles with all hardware optimizations:
+
+```bash
+# Companion Radio BLE (Default)
+pio run -e NM_EPD_420_BW_companion_radio_ble
+
+# Companion Radio USB
+pio run -e NM_EPD_420_BW_companion_radio_usb
+
+# Repeater
+pio run -e NM_EPD_420_BW_repeater
+
+# Room Server
+pio run -e NM_EPD_420_BW_room_server
+
+# KISS Modem
+pio run -e NM_EPD_420_BW_kiss_modem
+```
 
 ## ⚡️ MeshCore Flasher
 

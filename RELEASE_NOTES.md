@@ -11,11 +11,15 @@
 
 This release upgrades the custom RockBase NM-EPD-420-BW firmware from MeshCore v1.17.1 to the newly released upstream **MeshCore Companion Firmware v1.18.0**. It incorporates all upstream v1.18.0 protocol changes, interactive CLI command handling, zero-hop node discovery, abstract UI decoupling via `MyMesh::Listener`, and dynamic WiFi support, while fully preserving and verifying every single hardware optimization engineered for the NM-EPD-420 board.
 
+In addition to Companion BLE, this release compiles and packages the complete suite of **all 5 official MeshCore firmware roles** into pre-built, unified single-file `0x0` flashable binaries: **Companion Radio BLE**, **Companion Radio USB**, **Repeater**, **Room Server**, and **KISS Modem**.
+
 ### Highlights:
+- **Full 5-Role Firmware Suite:** Standalone unified `0x0` images for all 5 roles (`companion_radio_ble`, `companion_radio_usb`, `repeater`, `room_server`, `kiss_modem`), each sharing the board-level `-MOD` hardware foundation (80 MHz CPU, 15s TWDT, MicroSD CS `IO7` bus isolation, AHT20/battery non-blocking state machines, and SX1262 22 dBm ceiling).
 - **Upstream v1.18.0 Integration:** Full protocol v14 support including `CMD_RUN_CLI_COMMAND` (CLI over BLE/WiFi/Serial), zero-hop Node Discover UI (`HomePage::DISCOVERY`), and decoupled event listening via `MyMesh::Listener`.
-- **Preserved Core 0 Asynchronous E-Paper Refresh:** 16 MHz FSPI refresh task maintains sub-millisecond frame dispatch with zero CPU blocking on the main thread.
+- **Preserved Core 0 Asynchronous E-Paper Refresh:** 16 MHz FSPI refresh task maintains sub-millisecond frame dispatch with zero CPU blocking on the main thread across all UI-enabled roles.
 - **Dynamic WiFi & BLE Support:** Dynamic WiFi interface with auto-reconnect and IP display, compatible with BLE coexistence on ESP32-S3.
 - **8 MB Octal PSRAM Offline Queue:** Large 256-frame offline message buffer in high-speed PSRAM with $O(1)$ ring buffer management.
+- **Interactive Multi-Role Flasher:** Upgraded `flash.ps1` and `flash.bat` with interactive menus allowing one-click flashing of any of the 5 roles.
 - **Hardware Button & Power Management:** 5-second `USER` button factory reset, physical `BOOT` ext0 deep sleep wakeup, and complete peripheral rail isolation.
 
 ---
