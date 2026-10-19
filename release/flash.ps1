@@ -99,19 +99,24 @@ if ($binCandidates) {
 
 Write-Host "`n[*] Flashing $firmwareFile to $Port at 921600 baud..." -ForegroundColor Yellow
 
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
 $pythonExe = "python"
 if ($env:USERPROFILE -and (Test-Path "$env:USERPROFILE\.platformio\penv\Scripts\python.exe")) {
     $pythonExe = "$env:USERPROFILE\.platformio\penv\Scripts\python.exe"
 }
 
-& $pythonExe -m esptool --port $Port --baud 921600 --chip esp32s3 write_flash 0x0 $firmwareFile
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "`n[ERROR] Flashing failed! Code: $LASTEXITCODE" -ForegroundColor Red
-    exit $LASTEXITCODE
+$esptoolPy = "$env:USERPROFILE\.platformio\packages\tool-esptoolpy\esptool.py"
+if (Test-Path $esptoolPy) {
+    & $pythonExe $esptoolPy --port $Port --baud 921600 --chip esp32s3 --after watchdog-reset write-flash 0x0 $firmwareFile
+} else {
+    & $pythonExe -m esptool --port $Port --baud 921600 --chip esp32s3 write_flash 0x0 $firmwareFile
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "`n[*] Resetting device via watchdog-reset..." -ForegroundColor Yellow
+        & $pythonExe -m esptool --port $Port --before no-reset --after watchdog-reset flash_id *>$null
+    }
 }
-
-Write-Host "`n[*] Resetting device via watchdog-reset..." -ForegroundColor Yellow
-& $pythonExe -m esptool --port $Port --before no-reset --after watchdog-reset flash_id *>$null
 
 Write-Host "`n[OK] Device flashed and restarted successfully as '$($selectedRole.Name)'!" -ForegroundColor Green
