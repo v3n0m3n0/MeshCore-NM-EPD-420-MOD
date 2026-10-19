@@ -18,6 +18,11 @@ MomentaryButton user_btn(PIN_USER_BTN, 1000, true);
 
 bool radio_init() {
   fallback_clock.begin();
+#if defined(PIN_BOARD_SDA) && defined(PIN_BOARD_SCL)
+  Wire.begin(PIN_BOARD_SDA, PIN_BOARD_SCL);
+#else
+  Wire.begin();
+#endif
   rtc_clock.begin(Wire);
   spi.begin(P_LORA_SCLK, P_LORA_MISO, P_LORA_MOSI, P_LORA_NSS);
   return radio.std_init(&spi);

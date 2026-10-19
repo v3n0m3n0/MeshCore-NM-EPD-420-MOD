@@ -1,72 +1,96 @@
 #include "NMEPD420EnvironmentSensorManager.h"
+#include <Wire.h>
 
-void NMEPD420EnvironmentSensorManager::powerOnSync() {
-  #ifdef AHTX0_POWER_PIN
-  digitalWrite(AHTX0_POWER_PIN, HIGH);
-  delay(AHTX0_POWER_WARMUP_MS);
-  #endif
-}
+#ifndef AHTX0_POWER_PIN
+#define AHTX0_POWER_PIN 40
+#endif
 
-void NMEPD420EnvironmentSensorManager::powerOff() {
-  #ifdef AHTX0_POWER_PIN
-  digitalWrite(AHTX0_POWER_PIN, LOW);
-  #endif
-  _power_warming = false;
-}
+#ifndef AHTX0_POWER_WARMUP_MS
+#define AHTX0_POWER_WARMUP_MS 50
+#endif
 
-void NMEPD420EnvironmentSensorManager::triggerAsyncRefresh() {
-  if (_active_sensor_count <= 0 || _power_warming) return;
-  #ifdef AHTX0_POWER_PIN
-  digitalWrite(AHTX0_POWER_PIN, HIGH);
-  _warmup_start_ms = millis();
-  _power_warming = true;
-  #else
-  readIntoCache();
-  #endif
-}
-
-void NMEPD420EnvironmentSensorManager::readIntoCache() {
-  CayenneLPP tmp(32);
-  EnvironmentSensorManager::querySensors(TELEM_PERM_ENVIRONMENT, tmp);
-  const uint8_t* b = tmp.getBuffer();
-  uint8_t sz = tmp.getSize();
-  uint8_t idx = 0;
-  while (idx + 2 <= sz) {
-    uint8_t type = b[idx + 1];
-    if (type == LPP_TEMPERATURE && idx + 4 <= sz) {
-      int16_t raw_t = static_cast<int16_t>((static_cast<uint16_t>(b[idx + 2]) << 8) | b[idx + 3]);
-      _cached_temp = raw_t / 10.0f;
-      _has_cache = true;
-      idx += 4;
-    } else if (type == LPP_RELATIVE_HUMIDITY && idx + 3 <= sz) {
-      _cached_hum = b[idx + 2] / 2.0f;
-      _has_cache = true;
-      idx += 3;
-    } else {
-      break;
-    }
-  }
-  _last_read_ms = millis();
-}
+#ifndef TELEM_AHTX_ADDRESS
+#define TELEM_AHTX_ADDRESS 0x38
+#endif
 
 bool NMEPD420EnvironmentSensorManager::begin() {
-  powerOnSync();
-  const bool result = EnvironmentSensorManager::begin();
-  if (result && _active_sensor_count > 0) {
-    readIntoCache();
+  #if defined(PIN_BOARD_SDA) && defined(PIN_BOARD_SCL)
+  Wire.begin(PIN_BOARD_SDA, PIN_BOARD_SCL);
+  #else
+  Wire.begin();
+  #endif
+  Wire.setTimeOut(50);
+
+  #ifdef AHTX0_POWER_PIN
+  pinMode(AHTX0_POWER_PIN, OUTPUT);
+  digitalWrite(AHTX0_POWER_PIN, LOW);
+  #endif
+
+  // Initial boot sensor reading to populate cache
+  sampleSensors();
+  return true;
+}
+
+void NMEPD420EnvironmentSensorManager::sampleSensors() {
+  #ifdef AHTX0_POWER_PIN
+  pinMode(AHTX0_POWER_PIN, OUTPUT);
+  // Drive TEMP_CTL (GPIO 40) HIGH to power AHT20
+  digitalWrite(AHTX0_POWER_PIN, HIGH);
+  // Wait 50 ms for power stabilization (cold power-on state)
+  delay(AHTX0_POWER_WARMUP_MS);
+  #endif
+
+  // Ensure Wire is active on the correct pins with a fast timeout
+  #if defined(PIN_BOARD_SDA) && defined(PIN_BOARD_SCL)
+  Wire.begin(PIN_BOARD_SDA, PIN_BOARD_SCL);
+  #else
+  Wire.begin();
+  #endif
+  Wire.setClock(100000);
+  Wire.setTimeOut(50);
+
+  // Probe I2C bus and initialize AHTX0 with retries
+  bool init_ok = false;
+  for (int attempt = 0; attempt < 3; attempt++) {
+    Wire.beginTransmission(TELEM_AHTX_ADDRESS);
+    if (Wire.endTransmission() == 0) {
+      if (Wire.requestFrom((uint8_t)TELEM_AHTX_ADDRESS, (uint8_t)1) == 1) {
+        uint8_t st = Wire.read();
+        if (st != 0xFF) {
+          if (AHTX0.begin(&Wire)) {
+            init_ok = true;
+            break;
+          }
+        }
+      }
+    }
+    delay(10);
   }
-  powerOff();
-  return result;
+
+  // If initialized, sample temperature and humidity
+  if (init_ok) {
+    sensors_event_t hum_event, temp_event;
+    if (AHTX0.getEvent(&hum_event, &temp_event)) {
+      if (!isnan(temp_event.temperature) && !isnan(hum_event.relative_humidity)) {
+        _cached_temp = temp_event.temperature;
+        _cached_hum = hum_event.relative_humidity;
+        _has_cache = true;
+        _active_sensor_count = 1;
+        _last_read_ms = millis();
+      }
+    }
+  }
+
+  #ifdef AHTX0_POWER_PIN
+  // Immediately power off AHT20 to eliminate quiescent leakage (0 uA)
+  digitalWrite(AHTX0_POWER_PIN, LOW);
+  #endif
 }
 
 void NMEPD420EnvironmentSensorManager::loop() {
   #if ENV_INCLUDE_GPS || defined(ENV_INCLUDE_BME680_BSEC)
   EnvironmentSensorManager::loop();
   #endif
-  if (_power_warming && (millis() - _warmup_start_ms >= AHTX0_POWER_WARMUP_MS)) {
-    readIntoCache();
-    powerOff();
-  }
 }
 
 bool NMEPD420EnvironmentSensorManager::querySensors(uint8_t requester_permissions, CayenneLPP& telemetry) {
@@ -75,17 +99,9 @@ bool NMEPD420EnvironmentSensorManager::querySensors(uint8_t requester_permission
   }
 
   if (requester_permissions & TELEM_PERM_ENVIRONMENT) {
-    if (!_has_cache && _active_sensor_count > 0) {
-      powerOnSync();
-      readIntoCache();
-      powerOff();
-    }
     if (_has_cache) {
       telemetry.addTemperature(TELEM_CHANNEL_SELF + 1, _cached_temp);
       telemetry.addRelativeHumidity(TELEM_CHANNEL_SELF + 1, _cached_hum);
-      if (millis() - _last_read_ms >= ENV_CACHE_TTL_MS) {
-        triggerAsyncRefresh();
-      }
     }
   }
   return true;

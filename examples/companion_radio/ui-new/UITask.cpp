@@ -195,12 +195,49 @@ class HomeScreen : public UIScreen {
   int sensors_nb = 0;
   bool sensors_scroll = false;
   int sensors_scroll_offset = 0;
+#if !defined(NM_EPD_420_BW)
   int next_sensors_refresh = 0;
+#endif
   float last_temp = 0.0f;
   float last_hum = 0.0f;
   bool has_env_data = false;
+#if defined(NM_EPD_420_BW)
+  bool _sensors_read_initial = false;
+#endif
 
-  void refresh_sensors() {
+public:
+  void refresh_sensors(bool force = false) {
+#if defined(NM_EPD_420_BW)
+    if (!_sensors_read_initial || force) {
+      _sensors_read_initial = true;
+      if (force || !sensors.hasCache()) {
+        sensors.sampleSensors();
+      }
+      sensors_lpp.reset();
+      sensors_nb = 0;
+      sensors_lpp.addVoltage(TELEM_CHANNEL_SELF, (float)board.getBattMilliVolts() / 1000.0f);
+      sensors.querySensors(0xFF, sensors_lpp);
+      LPPReader reader (sensors_lpp.getBuffer(), sensors_lpp.getSize());
+      uint8_t channel, type;
+      while(reader.readHeader(channel, type)) {
+        if (type == LPP_TEMPERATURE) {
+          float t = 0.0f;
+          reader.readTemperature(t);
+          last_temp = t;
+          has_env_data = true;
+        } else if (type == LPP_RELATIVE_HUMIDITY) {
+          float h = 0.0f;
+          reader.readRelativeHumidity(h);
+          last_hum = h;
+          has_env_data = true;
+        } else {
+          reader.skipData(type);
+        }
+        sensors_nb ++;
+      }
+      sensors_scroll = sensors_nb > UI_RECENT_LIST_SIZE;
+    }
+#else
     if (millis() > next_sensors_refresh) {
       sensors_lpp.reset();
       sensors_nb = 0;
@@ -228,16 +265,11 @@ class HomeScreen : public UIScreen {
 #if AUTO_OFF_MILLIS > 0
       next_sensors_refresh = millis() + 5000; // refresh sensor values every 5 sec
 #else
-#if defined(NM_EPD_420_BW)
-      next_sensors_refresh = millis() + 600000; // refresh sensor values every 10 min (600s)
-#else
       next_sensors_refresh = millis() + 60000; // refresh sensor values every 1 min
 #endif
-#endif
     }
+#endif
   }
-
-public:
   HomeScreen(UITask* task, mesh::RTCClock* rtc, SensorManager* sensors, NodePrefs* node_prefs)
      : _task(task), _rtc(rtc), _sensors(sensors), _node_prefs(node_prefs), _page(0),
        _shutdown_init(false), sensors_lpp(200) {  }
@@ -754,9 +786,10 @@ public:
     }
     if (c == KEY_ENTER && _page == HomePage::RADIO) {
 #if defined(NM_EPD_420_BW)
-      sensors.triggerAsyncRefresh();
-#endif
+      refresh_sensors(true);
+#else
       next_sensors_refresh = 0;
+#endif
       _task->showAlert("Sensors refreshed", 800);
       return true;
     }
@@ -1176,7 +1209,13 @@ void UITask::loop() {
   } else if (boot_ev == BUTTON_EVENT_LONG_PRESS) {
     c = handleLongPress(KEY_ENTER);
   } else if (boot_ev == BUTTON_EVENT_DOUBLE_CLICK) {
-    c = handleDoubleClick(KEY_SELECT);
+    checkDisplayOn(0);
+    display.forceFullRefresh();
+    showAlert("Screen Refresh", 800);
+    _next_refresh = 0;
+    if (home) {
+      ((HomeScreen *) home)->refresh_sensors(true);
+    }
   }
 
   int ev = user_btn.check();
@@ -1184,10 +1223,14 @@ void UITask::loop() {
     c = checkDisplayOn(KEY_PREV);
   } else if (c == 0 && ev == BUTTON_EVENT_LONG_PRESS) {
     c = handleLongPress(KEY_PREV);
-  } else if (ev == BUTTON_EVENT_DOUBLE_CLICK) {
+  } else if (boot_ev != BUTTON_EVENT_DOUBLE_CLICK && ev == BUTTON_EVENT_DOUBLE_CLICK) {
+    checkDisplayOn(0);
     display.forceFullRefresh();
     showAlert("Screen Refresh", 800);
     _next_refresh = 0;
+    if (home) {
+      ((HomeScreen *) home)->refresh_sensors(true);
+    }
   } 
 #elif defined(PIN_USER_BTN)
   int ev = user_btn.check();
