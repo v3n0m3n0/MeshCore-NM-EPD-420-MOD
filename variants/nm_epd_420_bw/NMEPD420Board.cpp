@@ -1,6 +1,9 @@
 #include "NMEPD420Board.h"
 #include <esp_task_wdt.h>
 #include <target.h>
+#ifdef ENABLE_WIFI_INTERFACE
+#include <WiFi.h>
+#endif
 
 #ifndef PIN_SDCARD_CS
 #define PIN_SDCARD_CS 7
@@ -238,10 +241,16 @@ void NMEPD420Board::enterDeepSleep(uint32_t secs) {
   digitalWrite(PIN_SDCARD_CS, HIGH);
   rtc_gpio_hold_en((gpio_num_t)PIN_SDCARD_CS);
 
-  // 4. Power off GPS if active
+  // 4. Power off GPS and WiFi if active
   if (sensors.getLocationProvider() != NULL) {
     sensors.getLocationProvider()->stop();
   }
+  #ifdef ENABLE_WIFI_INTERFACE
+  if (WiFi.getMode() != WIFI_OFF) {
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+  }
+  #endif
 
   // 5. Flush serial buffers
   Serial.flush();

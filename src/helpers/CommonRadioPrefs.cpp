@@ -135,13 +135,21 @@ bool CommonRadioPrefs::handleCommand(const char* command, uint32_t sender_timest
   }
 
   if (memcmp(command, "get tx", 6) == 0 && (command[6] == 0 || command[6] == ' ')) {
-    sprintf(reply, "> %d", (int32_t) getTxPower());
+    sprintf(reply, "> %d", (int32_t)(int8_t) getTxPower());
     return true;
   }
   if (memcmp(command, "set tx ", 7) == 0) {
-    setTxPower(atoi(&command[7]));
-    radio_driver.setTxPower(getTxPower());
-    strcpy(reply, "OK");
+    int power = atoi(&command[7]);
+    #ifndef MAX_LORA_TX_POWER
+      #define MAX_LORA_TX_POWER 22
+    #endif
+    if (power < -9 || power > MAX_LORA_TX_POWER) {
+      sprintf(reply, "Error, tx power must be -9 to %d dBm", (int)MAX_LORA_TX_POWER);
+    } else {
+      setTxPower((uint8_t)power);
+      radio_driver.setTxPower((int8_t)getTxPower());
+      strcpy(reply, "OK");
+    }
     return true;
   }
 

@@ -2125,11 +2125,26 @@ bool MyMesh::handleCommand(const char* command, uint32_t sender_timestamp, char*
   }
 
   if (strcmp(command, "reboot") == 0) {
+    if (dirty_contacts_expiry) {
+      saveContacts();
+    }
     board.reboot(); // doesn't return
     return true;
   }
 
   if (strcmp(command, "poweroff") == 0 || strcmp(command, "shutdown") == 0) {
+    if (dirty_contacts_expiry) {
+      saveContacts();
+    }
+#if defined(DISPLAY_CLASS) && defined(NM_EPD_420_BW)
+    display.startFrame();
+    display.setTextSize(1);
+    display.setColor(UIColor::warning_txt);
+    display.drawTextCentered(display.width() / 2, display.height() / 2 - 8, "hibernating...");
+    display.setColor(UIColor::secondary_txt);
+    display.drawTextCentered(display.width() / 2, display.height() / 2 + 8, "Press BOOT to wake");
+    display.endFrame();
+#endif
     board.powerOff(); // doesn't return
     return true;
   }

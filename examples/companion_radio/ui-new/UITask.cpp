@@ -2,7 +2,7 @@
 #include <helpers/TxtDataHelpers.h>
 #include "../MyMesh.h"
 #include "target.h"
-#ifdef WIFI_SSID
+#if defined(ENABLE_WIFI_INTERFACE) || defined(WIFI_SSID)
   #include <WiFi.h>
 #endif
 
@@ -268,7 +268,7 @@ public:
       d->snr_in = radio_driver.getLastSNR();
       ContactInfo* c = the_mesh.lookupContactByPubKey(&packet->payload[6], 8);
       if (c != NULL) {
-        strncpy(d->name, c->name, 32);
+        StrHelper::strncpy(d->name, c->name, sizeof(d->name));
       } else {
         d->name[0] = 0;
       }
@@ -316,7 +316,12 @@ public:
     }
 
     if (_page == HomePage::FIRST) {
-      const int dy = NM_DY(26, 85);
+      #if defined(ENABLE_WIFI_INTERFACE) || defined(WIFI_SSID)
+      const bool show_wifi = (_node_prefs->wifi_enabled == 1 && _node_prefs->getWifiSSID()[0] != 0);
+      #else
+      const bool show_wifi = false;
+      #endif
+      const int dy = NM_DY(26, show_wifi ? 105 : 85);
       display.setColor(UIColor::primary_txt);
       display.setTextSize(2);
       sprintf(tmp, "MSG: %d", _task->getMsgCount());
@@ -341,10 +346,15 @@ public:
       }
 
       #if defined(ENABLE_WIFI_INTERFACE) || defined(WIFI_SSID)
-        if (_node_prefs->wifi_enabled == 1) {
-          IPAddress ip = WiFi.localIP();
-          snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+        if (show_wifi) {
+          display.setColor(UIColor::secondary_txt);
           display.setTextSize(1);
+          if (WiFi.status() == WL_CONNECTED) {
+            IPAddress ip = WiFi.localIP();
+            snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+          } else {
+            strcpy(tmp, "WiFi: connecting...");
+          }
           display.drawTextCentered(display.width() / 2, 96 + dy, tmp);
         }
       #endif
@@ -353,6 +363,7 @@ public:
       display.setColor(UIColor::primary_txt);
 #if defined(NM_EPD_420_BW)
       const int row_step = 14;  // spread the list over the full 400x300 panel height
+      bool has_recent = false;
 #else
       const int row_step = 11;
 #endif
@@ -360,6 +371,9 @@ public:
       for (int i = 0; i < UI_RECENT_LIST_SIZE; i++, y += row_step) {
         auto a = &recent[i];
         if (a->name[0] == 0) continue;  // empty slot
+#if defined(NM_EPD_420_BW)
+        has_recent = true;
+#endif
         int secs = _rtc->getCurrentTime() - a->recv_timestamp;
 #if defined(NM_EPD_420_BW)
         if (secs < 60) {
@@ -388,6 +402,12 @@ public:
         display.setCursor(display.width() - timestamp_width - 1, y);
         display.print(tmp);
       }
+#if defined(NM_EPD_420_BW)
+      if (!has_recent) {
+        display.setColor(UIColor::secondary_txt);
+        display.drawTextCentered(display.width() / 2, display.height() / 2, "Recent adverts: none");
+      }
+#endif
     } else if (_page == HomePage::RADIO) {
       display.setColor(UIColor::primary_txt);
       display.setTextSize(1);
@@ -630,7 +650,7 @@ public:
         if ((a->name[0] == 0) || !discovery_disp_names) {
           mesh::Utils::toHex(name, a->pubkey_prefix, 4);
         } else {
-          strncpy(name, a->name, 32);
+          StrHelper::strncpy(name, a->name, sizeof(name));
         }
         char filtered_name[sizeof(name)];
         char snr_s[12];
@@ -646,14 +666,23 @@ public:
         display.setCursor(display.width() - snr_width - 1, y);
         display.print(snr_s);
       }
-      if (millis() < discovery_req_time + 5000) {
+      if (discovery_req_time != 0 && millis() < discovery_req_time + 5000) {
+#if defined(NM_EPD_420_BW)
+        display.setColor(UIColor::secondary_txt);
+        display.drawTextCentered(display.width() / 2, display.height() - 16, "Scanning repeaters...");
+#endif
         return 1000; // more frequent updates just after req
       } else if (count < DISCOVERED_NODES_TABLE_SIZE - 1) { // show prompt if list not full
 #if defined(NM_EPD_420_BW)
+        if (count == 0) {
+          display.setColor(UIColor::secondary_txt);
+          display.drawTextCentered(display.width() / 2, display.height() / 2 - 6, "Repeater discovery");
+        }
         y = display.height() - 16;
 #else
         y = 10 + 11 * DISCOVERED_NODES_TABLE_SIZE;
 #endif
+        display.setColor(UIColor::secondary_txt);
         display.drawTextCentered(display.width() / 2, y, "discover: " PRESS_LABEL);
       }
 #endif
@@ -694,6 +723,7 @@ public:
     }
     if (c == KEY_NEXT || c == KEY_RIGHT) {
       _page = (_page + 1) % HomePage::Count;
+#if !defined(NM_EPD_420_BW)
       if (_page == HomePage::RECENT) {
         _task->showAlert("Recent adverts", 800);
       }
@@ -701,6 +731,7 @@ public:
       if (_page == HomePage::DISCOVERY) {
         _task->showAlert("Repeater disc", 800);
       }
+#endif
 #endif
       return true;
     }
@@ -1043,6 +1074,9 @@ void UITask::onControlDataRecv(const mesh::Packet* packet) {
 #if UI_DISCOVER_SCREEN
   if (packet->payload_len >= 14 && (packet->payload[0] & 0xF0) == CTL_TYPE_NODE_DISCOVER_RESP) {
     ((HomeScreen *) home)->handleDiscoverResponse(packet);
+    if (_display != NULL && _display->isOn()) {
+      _next_refresh = millis() + 200;
+    }
   }
 #endif
 }
@@ -1292,10 +1326,19 @@ char UITask::checkDisplayOn(char c) {
 }
 
 char UITask::handleLongPress(char c) {
+#if defined(NM_EPD_420_BW)
+  if (curr == splash && (millis() - ui_started_at < 8000)) {   // only enter CLI/rescue on long-press during splash screen
+    the_mesh.enterCLIRescue();
+    showAlert("CLI Rescue Mode", 3000);
+    _next_refresh = 0;
+    c = 0;   // consume event
+  }
+#else
   if (millis() - ui_started_at < 8000) {   // long press in first 8 seconds since startup -> CLI/rescue
     the_mesh.enterCLIRescue();
     c = 0;   // consume event
   }
+#endif
   return c;
 }
 

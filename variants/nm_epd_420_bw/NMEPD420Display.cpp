@@ -33,6 +33,9 @@ void NMEPD420Display::epdRefreshTask(void* param) {
 }
 
 void NMEPD420Display::waitWhileBusy() {
+  while (_is_refreshing) {
+    vTaskDelay(pdMS_TO_TICKS(5));
+  }
   if (_epd_mutex) {
     if (xSemaphoreTake(_epd_mutex, portMAX_DELAY) == pdTRUE) {
       xSemaphoreGive(_epd_mutex);
