@@ -26,7 +26,7 @@ Wprowadzone poprawki eliminują ryzyko rozładowania baterii poniżej bezpieczne
   * `PIN_ES8311_POWER` (GPIO 44) – odcięcie zasilania kodeka audio,
   * `SX126X_POWER_EN` (GPIO 47) – całkowite odcięcie zasilania modułu radiowego SX1262.
 * **Aktywacja globalnego zatrzasku cyfrowego:** Przed uśpieniem wywoływane jest `gpio_deep_sleep_hold_en()`, co trwale blokuje stany wyjść cyfrowych na czas snu układu, redukując prąd uśpienia do minimum i eliminując prądy upływu.
-* **Bezpieczne zwalnianie zatrzasków po wybudzeniu:** W procedurze `NMEPD420Board::begin()` dodano natychmiastowe zwalnianie zatrzasków (`gpio_deep_sleep_hold_dis()` oraz `gpio_hold_dis()` dla każdego pinu) zarówno przy starcie z deep sleep, jak i przy cold boot / WDT reset.
+* **Bezpieczne, bezglitchowe zwalnianie zatrzasków po wybudzeniu:** W procedurze `NMEPD420Board::begin()` wszystkie linie wyjściowe (w tym `P_LORA_NSS`, `PIN_SDCARD_CS`, szyny zasilające) są wymuszane w zdefiniowane stany aktywne (HIGH/LOW) **przed** wywołaniem `gpio_deep_sleep_hold_dis()` / `gpio_hold_dis()`. Zapobiega to przejściowym stanom nieustalonym (glitch) i kolizjom na magistrali SPI. Zwalnianie zatrzasków następuje bezwarunkowo przy każdym resecie/starcie MCU. Ponadto wybudzenie z pakietu LoRa na DIO1 jest blokowane w uśpieniu, gdy moduł radiowy SX1262 jest odcięty od zasilania (`SX126X_POWER_EN` LOW), co eliminuje fałszywe pętle wybudzeń.
 * **Separacja magistrali LoRa i MicroSD:** Linie `P_LORA_NSS` (GPIO 8) oraz `PIN_SDCARD_CS` (GPIO 7) są trwale zatrzaskiwane w stanie wysokim w domenie RTC (`rtc_gpio_hold_en`), uniemożliwiając zakłócenie magistrali SPI przez kartę pamięci MicroSD.
 
 ### 2. Bezpieczna sekwencja zasilania magistrali I2C przed `ESP32Board::begin()` (Anty-ESD Clamping)

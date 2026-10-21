@@ -34,42 +34,29 @@ void NMEPD420Board::begin() {
     if (wakeup_cause == ESP_SLEEP_WAKEUP_EXT1) {
       wakeup_source = esp_sleep_get_ext1_wakeup_status();
     }
-    gpio_deep_sleep_hold_dis();
-    rtc_gpio_hold_dis((gpio_num_t)P_LORA_NSS);
-    rtc_gpio_hold_dis((gpio_num_t)PIN_SDCARD_CS);
-#ifdef AHTX0_POWER_PIN
-    gpio_hold_dis((gpio_num_t)AHTX0_POWER_PIN);
-#endif
-#ifdef PIN_ADC_CTRL
-    gpio_hold_dis((gpio_num_t)PIN_ADC_CTRL);
-#endif
-#ifdef PIN_AMP_ENABLE
-    gpio_hold_dis((gpio_num_t)PIN_AMP_ENABLE);
-#endif
-#ifdef PIN_ES8311_POWER
-    gpio_hold_dis((gpio_num_t)PIN_ES8311_POWER);
-#endif
-#ifdef SX126X_POWER_EN
-    gpio_hold_dis((gpio_num_t)SX126X_POWER_EN);
-#endif
 #ifdef P_LORA_DIO_1
     rtc_gpio_deinit((gpio_num_t)P_LORA_DIO_1);
 #endif
 #ifdef PIN_BOOT_BTN
     rtc_gpio_deinit((gpio_num_t)PIN_BOOT_BTN);
 #endif
-  } else {
-    // Clear any residual deep sleep digital pad hold on cold boot or watchdog/software reset
-    gpio_deep_sleep_hold_dis();
   }
+
+  // 1. Establish defined active output drive levels BEFORE releasing pad holds
+  // Keeps SPI CS lines pulled HIGH to prevent bus collisions or SPI flash/SD glitching
+  pinMode(P_LORA_NSS, OUTPUT);
+  digitalWrite(P_LORA_NSS, HIGH);
+
+  pinMode(PIN_SDCARD_CS, OUTPUT);
+  digitalWrite(PIN_SDCARD_CS, HIGH);
 
 #ifdef SX126X_POWER_EN
   pinMode(SX126X_POWER_EN, OUTPUT);
   digitalWrite(SX126X_POWER_EN, HIGH);
 #endif
 
-// Keep audio amplifier disabled (0 current draw), but power codec and sensor rails HIGH to prevent ESD
-// clamping on shared I2C bus (IO39/38)
+  // Keep audio amplifier disabled (0 current draw), but power codec and sensor rails HIGH to prevent ESD
+  // clamping on shared I2C bus (IO39/38)
 #ifdef PIN_AMP_ENABLE
   pinMode(PIN_AMP_ENABLE, OUTPUT);
   digitalWrite(PIN_AMP_ENABLE, LOW);
@@ -90,12 +77,27 @@ void NMEPD420Board::begin() {
   digitalWrite(PIN_ADC_CTRL, LOW);
 #endif
 
-  // Keep shared HSPI MicroSD CS (GPIO 7) de-asserted HIGH so an inserted SD card never collides with SX1262
-  // LoRa
-  pinMode(PIN_SDCARD_CS, OUTPUT);
-  digitalWrite(PIN_SDCARD_CS, HIGH);
+  // 2. Unhold all pads unconditionally across RTC and digital domains on any reset / wakeup
+  gpio_deep_sleep_hold_dis();
+  rtc_gpio_hold_dis((gpio_num_t)P_LORA_NSS);
+  rtc_gpio_hold_dis((gpio_num_t)PIN_SDCARD_CS);
+#ifdef AHTX0_POWER_PIN
+  gpio_hold_dis((gpio_num_t)AHTX0_POWER_PIN);
+#endif
+#ifdef PIN_ADC_CTRL
+  gpio_hold_dis((gpio_num_t)PIN_ADC_CTRL);
+#endif
+#ifdef PIN_AMP_ENABLE
+  gpio_hold_dis((gpio_num_t)PIN_AMP_ENABLE);
+#endif
+#ifdef PIN_ES8311_POWER
+  gpio_hold_dis((gpio_num_t)PIN_ES8311_POWER);
+#endif
+#ifdef SX126X_POWER_EN
+  gpio_hold_dis((gpio_num_t)SX126X_POWER_EN);
+#endif
 
-  // Initialize base ESP32Board now that power rails are up and pad holds released (prevents I2C ESD clamping)
+  // 3. Initialize base ESP32Board now that power rails are stable and pad holds released (prevents I2C ESD clamping)
   ESP32Board::begin();
 
   if (reason == ESP_RST_DEEPSLEEP) {
@@ -281,7 +283,8 @@ void NMEPD420Board::enterDeepSleep(uint32_t secs) {
 #endif
 
 // 9. Configure LoRa Packet Wakeup on DIO1 (GPIO 14):
-#ifdef P_LORA_DIO_1
+// 9. Configure LoRa Packet Wakeup on DIO1 (GPIO 14) only if LoRa modem is not powered down
+#if defined(P_LORA_DIO_1) && !defined(SX126X_POWER_EN)
   rtc_gpio_init((gpio_num_t)P_LORA_DIO_1);
   rtc_gpio_set_direction((gpio_num_t)P_LORA_DIO_1, RTC_GPIO_MODE_INPUT_ONLY);
   rtc_gpio_pulldown_en((gpio_num_t)P_LORA_DIO_1);

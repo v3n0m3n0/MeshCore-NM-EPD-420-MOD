@@ -64,6 +64,10 @@ foreach ($role in $roles) {
         $defaultAlias = Join-Path $releaseDir "MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.2.bin"
         Copy-Item -Path $mergedBin -Destination $defaultAlias -Force
         Write-Host "[OK] Created default alias $defaultAlias ($size bytes)" -ForegroundColor Green
+
+        $firmwareBin = Join-Path $releaseDir "firmware.bin"
+        Copy-Item -Path $mergedBin -Destination $firmwareBin -Force
+        Write-Host "[OK] Updated default $firmwareBin ($size bytes)" -ForegroundColor Green
     }
 }
 
@@ -76,7 +80,7 @@ Write-Host "`n=== Git Status & Commit ===" -ForegroundColor Cyan
 # Git commit and tag
 & $git add -A
 & $git commit -m "release(v1.18.0-mod-rev0.2): rebuild all 5 roles with power rail & lipo safety fixes"
-& $git tag -a v1.18.0-mod-rev0.2 -m "MeshCore-NM-EPD-420-BW v1.18.0-mod-rev0.2"
+& $git tag -fa v1.18.0-mod-rev0.2 -m "MeshCore-NM-EPD-420-BW v1.18.0-mod-rev0.2"
 Write-Host "[OK] Git commit and tag completed!" -ForegroundColor Green
 
 & $git log -1 --stat

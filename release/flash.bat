@@ -2,6 +2,11 @@
 setlocal enabledelayedexpansion
 title Flash MeshCore NM-EPD-420-BW Firmware Suite
 
+:: Ensure UTF-8 execution to prevent esptool progress bar Unicode crashes on Windows (CP1250)
+set "PYTHONIOENCODING=utf-8"
+set "PYTHONUTF8=1"
+chcp 65001 >nul 2>&1
+
 echo ======================================================================
 echo    MeshCore NM-EPD-420-BW (ESP32-S3) Firmware Suite Flasher
 echo ======================================================================
@@ -69,7 +74,22 @@ echo [*] Selected Role: !ROLENAME!
 echo [*] Writing unified image: !BINFILE! to 0x0...
 echo.
 
-python -m esptool --port %PORT% --baud 921600 --chip esp32s3 write_flash 0x0 "%~dp0!BINFILE!"
+set "PYTHON_EXE=python"
+if exist "%USERPROFILE%\.platformio\penv\Scripts\python.exe" (
+    set "PYTHON_EXE=%USERPROFILE%\.platformio\penv\Scripts\python.exe"
+)
+set "ESPTOOL_PY=%USERPROFILE%\.platformio\packages\tool-esptoolpy\esptool.py"
+
+if exist "!ESPTOOL_PY!" (
+    "!PYTHON_EXE!" -X utf8 "!ESPTOOL_PY!" --port %PORT% --baud 921600 --chip esp32s3 --after watchdog-reset write-flash 0x0 "%~dp0!BINFILE!"
+) else (
+    "!PYTHON_EXE!" -X utf8 -m esptool --port %PORT% --baud 921600 --chip esp32s3 write_flash 0x0 "%~dp0!BINFILE!"
+    if !ERRORLEVEL! EQU 0 (
+        echo.
+        echo [*] Resetting device via watchdog-reset...
+        "!PYTHON_EXE!" -X utf8 -m esptool --port %PORT% --before no-reset --after watchdog-reset flash_id >nul 2>&1
+    )
+)
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
@@ -77,10 +97,6 @@ if %ERRORLEVEL% NEQ 0 (
     pause
     exit /b %ERRORLEVEL%
 )
-
-echo.
-echo [*] Flashing completed successfully! Resetting device...
-python -m esptool --port %PORT% --before no-reset --after watchdog-reset flash_id >nul 2>&1
 
 echo.
 echo [OK] Done! Your RockBase NM-EPD-420-BW is now running MeshCore-mod (!ROLENAME!).
