@@ -19,72 +19,116 @@ bool NMEPD420EnvironmentSensorManager::begin() {
   #else
   Wire.begin();
   #endif
-  Wire.setTimeOut(50);
+  Wire.setClock(100000);
+  Wire.setTimeOut(100);
 
   #ifdef AHTX0_POWER_PIN
   pinMode(AHTX0_POWER_PIN, OUTPUT);
-  digitalWrite(AHTX0_POWER_PIN, LOW);
+  digitalWrite(AHTX0_POWER_PIN, HIGH);
+  delay(AHTX0_POWER_WARMUP_MS);
   #endif
 
   // Initial boot sensor reading to populate cache
-  sampleSensors();
-  return true;
+  return sampleSensors();
 }
 
-void NMEPD420EnvironmentSensorManager::sampleSensors() {
+bool NMEPD420EnvironmentSensorManager::sampleSensors() {
   #ifdef AHTX0_POWER_PIN
   pinMode(AHTX0_POWER_PIN, OUTPUT);
   // Drive TEMP_CTL (GPIO 40) HIGH to power AHT20
   digitalWrite(AHTX0_POWER_PIN, HIGH);
-  // Wait 50 ms for power stabilization (cold power-on state)
   delay(AHTX0_POWER_WARMUP_MS);
   #endif
 
-  // Ensure Wire is active on the correct pins with a fast timeout
   #if defined(PIN_BOARD_SDA) && defined(PIN_BOARD_SCL)
   Wire.begin(PIN_BOARD_SDA, PIN_BOARD_SCL);
   #else
   Wire.begin();
   #endif
   Wire.setClock(100000);
-  Wire.setTimeOut(50);
+  Wire.setTimeOut(100);
 
-  // Probe I2C bus and initialize AHTX0 with retries
-  bool init_ok = false;
-  for (int attempt = 0; attempt < 3; attempt++) {
+  // 1. Probe address 0x38
+  Wire.beginTransmission(TELEM_AHTX_ADDRESS);
+  int probe_err = Wire.endTransmission();
+  if (probe_err != 0) {
+    Serial.printf("[AHT20] Probe failed at 0x%02X, err=%d\n", TELEM_AHTX_ADDRESS, probe_err);
+    return false;
+  }
+
+  // 2. Query status (command 0x71)
+  uint8_t status = 0;
+  Wire.beginTransmission(TELEM_AHTX_ADDRESS);
+  Wire.write(0x71);
+  if (Wire.endTransmission() == 0) {
+    if (Wire.requestFrom((uint8_t)TELEM_AHTX_ADDRESS, (uint8_t)1) == 1) {
+      status = Wire.read();
+    }
+  }
+
+  // 3. If uncalibrated (Bit 3 == 0) or uninitialized, send AHT20 init command [0xBE, 0x08, 0x00]
+  if ((status & 0x08) == 0) {
     Wire.beginTransmission(TELEM_AHTX_ADDRESS);
-    if (Wire.endTransmission() == 0) {
-      if (Wire.requestFrom((uint8_t)TELEM_AHTX_ADDRESS, (uint8_t)1) == 1) {
-        uint8_t st = Wire.read();
-        if (st != 0xFF) {
-          if (AHTX0.begin(&Wire)) {
-            init_ok = true;
-            break;
-          }
-        }
+    Wire.write(0xBE);
+    Wire.write(0x08);
+    Wire.write(0x00);
+    Wire.endTransmission();
+    delay(15);
+  }
+
+  // 4. Trigger measurement [0xAC, 0x33, 0x00]
+  Wire.beginTransmission(TELEM_AHTX_ADDRESS);
+  Wire.write(0xAC);
+  Wire.write(0x33);
+  Wire.write(0x00);
+  if (Wire.endTransmission() != 0) {
+    Serial.println("[AHT20] Trigger measurement command failed");
+    return false;
+  }
+
+  // AHT20 conversion takes ~80ms
+  delay(80);
+
+  // 5. Read 6 data bytes, retrying if busy bit (Bit 7) is set
+  uint8_t data[6] = {0};
+  bool measurement_ready = false;
+  for (int retry = 0; retry < 5; retry++) {
+    if (Wire.requestFrom((uint8_t)TELEM_AHTX_ADDRESS, (uint8_t)6) == 6) {
+      for (int i = 0; i < 6; i++) {
+        data[i] = Wire.read();
+      }
+      if ((data[0] & 0x80) == 0) {
+        measurement_ready = true;
+        break;
       }
     }
     delay(10);
   }
 
-  // If initialized, sample temperature and humidity
-  if (init_ok) {
-    sensors_event_t hum_event, temp_event;
-    if (AHTX0.getEvent(&hum_event, &temp_event)) {
-      if (!isnan(temp_event.temperature) && !isnan(hum_event.relative_humidity)) {
-        _cached_temp = temp_event.temperature;
-        _cached_hum = hum_event.relative_humidity;
-        _has_cache = true;
-        _active_sensor_count = 1;
-        _last_read_ms = millis();
-      }
-    }
+
+  if (!measurement_ready) {
+    Serial.println("[AHT20] Measurement timeout / busy bit set");
+    return false;
   }
 
-  #ifdef AHTX0_POWER_PIN
-  // Immediately power off AHT20 to eliminate quiescent leakage (0 uA)
-  digitalWrite(AHTX0_POWER_PIN, LOW);
-  #endif
+  uint32_t hum_raw = ((uint32_t)data[1] << 12) | ((uint32_t)data[2] << 4) | (data[3] >> 4);
+  uint32_t temp_raw = (((uint32_t)data[3] & 0x0F) << 16) | ((uint32_t)data[4] << 8) | data[5];
+
+  float hum = (hum_raw * 100.0f) / 1048576.0f;
+  float temp = ((temp_raw * 200.0f) / 1048576.0f) - 50.0f;
+
+  if (temp >= -40.0f && temp <= 85.0f && hum >= 0.0f && hum <= 100.0f) {
+    _cached_temp = temp;
+    _cached_hum = hum;
+    _has_cache = true;
+    _active_sensor_count = 1;
+    _last_read_ms = millis();
+    Serial.printf("[AHT20] Read OK: T=%.1f C, H=%.1f %%\n", temp, hum);
+    return true;
+  }
+
+  Serial.printf("[AHT20] Invalid data range: T=%.1f C, H=%.1f %%\n", temp, hum);
+  return false;
 }
 
 void NMEPD420EnvironmentSensorManager::loop() {

@@ -195,9 +195,7 @@ class HomeScreen : public UIScreen {
   int sensors_nb = 0;
   bool sensors_scroll = false;
   int sensors_scroll_offset = 0;
-#if !defined(NM_EPD_420_BW)
-  int next_sensors_refresh = 0;
-#endif
+  uint32_t next_sensors_refresh = 0;
   float last_temp = 0.0f;
   float last_hum = 0.0f;
   bool has_env_data = false;
@@ -208,9 +206,10 @@ class HomeScreen : public UIScreen {
 public:
   void refresh_sensors(bool force = false) {
 #if defined(NM_EPD_420_BW)
-    if (!_sensors_read_initial || force) {
+    if (!_sensors_read_initial || force || !has_env_data || (millis() > next_sensors_refresh)) {
       _sensors_read_initial = true;
-      if (force || !sensors.hasCache()) {
+      next_sensors_refresh = millis() + 60000;
+      if (force || !sensors.hasCache() || (millis() - sensors.getLastReadMs() > 50000)) {
         sensors.sampleSensors();
       }
       sensors_lpp.reset();

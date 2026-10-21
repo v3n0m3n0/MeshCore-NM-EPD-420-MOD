@@ -36,7 +36,7 @@ if "%ROLE%"=="" set ROLE=1
 set "BINFILE="
 if "%ROLE%"=="1" (
     for /f "delims=" %%f in ('dir /b /o:n "%~dp0*companion_radio_ble*.bin" 2^>nul') do set "BINFILE=%%f"
-    if "!BINFILE!"=="" set "BINFILE=MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.1.bin"
+    if "!BINFILE!"=="" set "BINFILE=MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.2.bin"
     set "ROLENAME=Companion Radio BLE"
 ) else if "%ROLE%"=="2" (
     for /f "delims=" %%f in ('dir /b /o:n "%~dp0*companion_radio_usb*.bin" 2^>nul') do set "BINFILE=%%f"
@@ -53,7 +53,7 @@ if "%ROLE%"=="1" (
 ) else (
     echo [!] Unknown role selection '%ROLE%', defaulting to Companion Radio BLE.
     for /f "delims=" %%f in ('dir /b /o:n "%~dp0*companion_radio_ble*.bin" 2^>nul') do set "BINFILE=%%f"
-    if "!BINFILE!"=="" set "BINFILE=MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.1.bin"
+    if "!BINFILE!"=="" set "BINFILE=MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.2.bin"
     set "ROLENAME=Companion Radio BLE"
 )
 

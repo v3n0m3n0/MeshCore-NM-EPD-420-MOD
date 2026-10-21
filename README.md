@@ -1,7 +1,7 @@
-# RockBase NM-EPD-420 MOD — MeshCore Firmware Suite (v1.18.0-mod-rev0.1)
+# RockBase NM-EPD-420 MOD — MeshCore Firmware Suite (v1.18.0-mod-rev0.2)
 
 > [!NOTE]
-> **Complete Hardware & Firmware MOD Suite (`v1.18.0-mod-rev0.1`)**  
+> **Complete Hardware & Firmware MOD Suite (`v1.18.0-mod-rev0.2`)**  
 > This repository provides an optimized, hardware-verified firmware suite of **MeshCore v1.18.0** for the **RockBase NM-EPD-420-BW** board (ESP32-S3R8 + 4.2" 400×300 B/W E-Paper + SX1262 LoRa + AHT20), with **all 5 official roles** pre-compiled and packaged into unified single-file `0x0` flashable binaries.
 
 ### 📦 Available Firmware Roles (-MOD Suite)
@@ -9,12 +9,12 @@
 All 5 roles share the custom hardware layer (`NMEPD420Board`, `NMEPD420Display`, `NMEPD420EnvironmentSensorManager`, `CommonRadioPrefs`):
 
 | Role | Unified Binary (`0x0`) | Size | Key Capabilities & Hardware Features |
-|---|---|:---:|---|
-| **Companion Radio BLE** | [`MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.1.bin`](release/MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.1.bin)<br>*(alias: `MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.1.bin`)* | 1.96 MB | Mobile App connectivity via BLE, dynamic WiFi station, interactive Companion CLI (`CMD_RUN_CLI_COMMAND`), zero-hop Node Discover UI (`HomePage::DISCOVERY`), 400×300 Core 0 Async E-Paper, 256 offline queue in PSRAM, AHT20 & battery telemetry, 5s factory reset. |
-| **Companion Radio USB** | [`MeshCore-NM-EPD-420-BW-companion_radio_usb-v1.18.0-mod-rev0.1.bin`](release/MeshCore-NM-EPD-420-BW-companion_radio_usb-v1.18.0-mod-rev0.1.bin) | 1.41 MB | Desktop / Laptop companion via USB CDC serial terminal or web app, 400×300 Core 0 Async E-Paper, 256 offline queue in PSRAM, AHT20 & battery telemetry. |
-| **Repeater** | [`MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.1.bin`](release/MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.1.bin) | 1.56 MB | Autonomous field / solar packet repeater, zero-hop neighbour discovery, live repeater statistics on 4.2" E-Paper, low-power 80 MHz MCU, shared HSPI MicroSD CS isolation, TCXO SX1262 (+22 dBm). |
-| **Room Server** | [`MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.1.bin`](release/MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.1.bin) | 1.56 MB | Micro-BBS room server for shared channels and bulletin posts, live statistics on 4.2" E-Paper, zero-hop discovery, low-power 80 MHz MCU, shared HSPI MicroSD CS isolation, TCXO SX1262 (+22 dBm). |
-| **KISS Modem** | [`MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.1.bin`](release/MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.1.bin) | 1.30 MB | Serial KISS TNC bridge for AX.25, APRS, TCP/IP, or Python hosts, headless operation (display disabled), audio PA disabled, low-power 80 MHz MCU, shared HSPI MicroSD CS isolation. |
+| --- | --- | :---: | --- |
+| **Companion Radio BLE** | [`MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.2.bin`](release/MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.2.bin)<br>*(alias: `MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.2.bin`)* | ~1.96 MB | Mobile App connectivity via BLE, dynamic WiFi station, interactive Companion CLI (`CMD_RUN_CLI_COMMAND`), zero-hop Node Discover UI (`HomePage::DISCOVERY`), 400×300 Core 0 Async E-Paper, 256 offline queue in PSRAM, AHT20 & battery telemetry, 5s factory reset. |
+| **Companion Radio USB** | [`MeshCore-NM-EPD-420-BW-companion_radio_usb-v1.18.0-mod-rev0.2.bin`](release/MeshCore-NM-EPD-420-BW-companion_radio_usb-v1.18.0-mod-rev0.2.bin) | ~1.41 MB | Desktop / Laptop companion via USB CDC serial terminal or web app, 400×300 Core 0 Async E-Paper, 256 offline queue in PSRAM, AHT20 & battery telemetry. |
+| **Repeater** | [`MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.2.bin`](release/MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.2.bin) | ~1.56 MB | Autonomous field / solar packet repeater, zero-hop neighbour discovery, live repeater statistics on 4.2" E-Paper, low-power 80 MHz MCU, shared HSPI MicroSD CS isolation, TCXO SX1262 (+22 dBm). |
+| **Room Server** | [`MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.2.bin`](release/MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.2.bin) | ~1.56 MB | Micro-BBS room server for shared channels and bulletin posts, live statistics on 4.2" E-Paper, zero-hop discovery, low-power 80 MHz MCU, shared HSPI MicroSD CS isolation, TCXO SX1262 (+22 dBm). |
+| **KISS Modem** | [`MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.2.bin`](release/MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.2.bin) | ~1.30 MB | Serial KISS TNC bridge for AX.25, APRS, TCP/IP, or Python hosts, headless operation (display disabled), audio PA disabled, low-power 80 MHz MCU, shared HSPI MicroSD CS isolation. |
 
 > 🚀 **1-Click Flasher & Binaries:** Available in [`release/`](release/) (`flash.ps1` / `flash.bat` with interactive role selection)  
 > 📄 **Technical Specs & Full Changelog:** [RELEASE_NOTES.md](RELEASE_NOTES.md) | [README_NM_EPD_420.md](README_NM_EPD_420.md) | [release/README.md](release/README.md)
@@ -51,23 +51,23 @@ MeshCore provides the ability to create wireless mesh networks, similar to Mesht
 
 ## 🚀 How to Get Started
 
-- Watch the [MeshCore QuickStart Playlist](https://www.youtube.com/watch?v=iaFltojJrAc&list=PLshzThxhw4O4WU_iZo3NmNZOv6KMrUuF9) by The Comms Channel
-- Watch the [MeshCore Technical Presentation](https://www.youtube.com/watch?v=OwmkVkZQTf4) by Liam Cottle.
-- Read through our [Frequently Asked Questions](./docs/faq.md) and [Documentation](https://docs.meshcore.io).
-- Flash the MeshCore firmware on a supported device.
-- Connect with a supported client.
+* Watch the [MeshCore QuickStart Playlist](https://www.youtube.com/watch?v=iaFltojJrAc&list=PLshzThxhw4O4WU_iZo3NmNZOv6KMrUuF9) by The Comms Channel
+* Watch the [MeshCore Technical Presentation](https://www.youtube.com/watch?v=OwmkVkZQTf4) by Liam Cottle.
+* Read through our [Frequently Asked Questions](./docs/faq.md) and [Documentation](https://docs.meshcore.io).
+* Flash the MeshCore firmware on a supported device.
+* Connect with a supported client.
 
 For developers:
 
-- Install [PlatformIO](https://docs.platformio.org) in [Visual Studio Code](https://code.visualstudio.com).
-- Clone and open the MeshCore repository in Visual Studio Code.
-- See the example applications you can modify and run:
-  - [Companion Radio](./examples/companion_radio) - For use with an external chat app, over BLE, USB or Wi-Fi.
-  - [KISS Modem](./examples/kiss_modem) - Serial KISS protocol bridge for host applications. ([protocol docs](./docs/kiss_modem_protocol.md))
-  - [Simple Repeater](./examples/simple_repeater) - Extends network coverage by relaying messages.
-  - [Simple Room Server](./examples/simple_room_server) - A simple BBS server for shared Posts.
-  - [Simple Secure Chat](./examples/simple_secure_chat) - Secure terminal based text communication between devices.
-  - [Simple Sensor](./examples/simple_sensor) - Remote sensor node with telemetry and alerting.
+* Install [PlatformIO](https://docs.platformio.org) in [Visual Studio Code](https://code.visualstudio.com).
+* Clone and open the MeshCore repository in Visual Studio Code.
+* See the example applications you can modify and run:
+  * [Companion Radio](./examples/companion_radio) - For use with an external chat app, over BLE, USB or Wi-Fi.
+  * [KISS Modem](./examples/kiss_modem) - Serial KISS protocol bridge for host applications. ([protocol docs](./docs/kiss_modem_protocol.md))
+  * [Simple Repeater](./examples/simple_repeater) - Extends network coverage by relaying messages.
+  * [Simple Room Server](./examples/simple_room_server) - A simple BBS server for shared Posts.
+  * [Simple Secure Chat](./examples/simple_secure_chat) - Secure terminal based text communication between devices.
+  * [Simple Sensor](./examples/simple_sensor) - Remote sensor node with telemetry and alerting.
 
 The Simple Secure Chat example can be interacted with through the Serial Monitor in Visual Studio Code, or with a Serial USB Terminal on Android.
 
@@ -96,11 +96,11 @@ pio run -e NM_EPD_420_BW_kiss_modem
 
 We have prebuilt firmware ready to flash on supported devices.
 
-- Launch https://meshcore.io/flasher
-- Select a supported device
-- Flash one of the firmware types:
-  - Companion, Repeater or Room Server
-- Once flashing is complete, you can connect with one of the MeshCore clients below.
+* Launch <https://meshcore.io/flasher>
+* Select a supported device
+* Flash one of the firmware types:
+  * Companion, Repeater or Room Server
+* Once flashing is complete, you can connect with one of the MeshCore clients below.
 
 ## 📱 MeshCore Clients
 
@@ -108,17 +108,17 @@ We have prebuilt firmware ready to flash on supported devices.
 
 The companion firmware can be connected to via BLE, USB or Wi-Fi depending on the firmware type you flashed.
 
-- Web: https://app.meshcore.nz
-- Android: https://play.google.com/store/apps/details?id=com.liamcottle.meshcore.android
-- iOS: https://apps.apple.com/us/app/meshcore/id6742354151?platform=iphone
-- NodeJS: https://github.com/liamcottle/meshcore.js
-- Python: https://github.com/fdlamotte/meshcore-cli
+* Web: <https://app.meshcore.nz>
+* Android: <https://play.google.com/store/apps/details?id=com.liamcottle.meshcore.android>
+* iOS: <https://apps.apple.com/us/app/meshcore/id6742354151?platform=iphone>
+* NodeJS: <https://github.com/liamcottle/meshcore.js>
+* Python: <https://github.com/fdlamotte/meshcore-cli>
 
 **Repeater and Room Server Firmware**
 
 The repeater and room server firmware can be set up via USB in the web config tool.
 
-- https://config.meshcore.io
+* <https://config.meshcore.io>
 
 They can also be managed via LoRa in the mobile app by using the Remote Management feature.
 
@@ -136,6 +136,7 @@ Please submit PR's using 'dev' as the base branch!
 For minor changes just submit your PR and we'll try to review it, but for anything more 'impactful' please open an Issue first and start a discussion. It is better to sound out what it is you want to achieve first, and try to come to a consensus on what the best approach is, especially when it impacts the structure or architecture of this codebase.
 
 Here are some general principles you should try to adhere to:
+
 * Keep it simple. Please, don't think like a high-level lang programmer. Think embedded, and keep code concise, without any unnecessary layers.
 * No dynamic memory allocation, except during setup/begin functions.
 * Use the same brace and indenting style that's in the core source modules. (A .clang-format is probably going to be added soon, but please do NOT retroactively re-format existing code. This just creates unnecessary diffs that make finding problems harder)
@@ -153,20 +154,20 @@ pio test --environment native --verbose
 ## Road-Map / To-Do
 
 There are a number of fairly major features in the pipeline, with no particular time-frames attached yet. In very rough chronological order:
-- [X] Companion radio: UI redesign
-- [X] Repeater + Room Server: add ACL's (like Sensor Node has)
-- [X] Standardise Bridge mode for repeaters
-- [ ] Repeater/Bridge: Standardise the Transport Codes for zoning/filtering
-- [X] Core + Repeater: enhanced zero-hop neighbour discovery
-- [ ] Core: round-trip manual path support
-- [ ] Companion + Apps: support for multiple sub-meshes (and 'off-grid' client repeat mode)
-- [ ] Core + Apps: support for LZW message compression
-- [ ] Core: dynamic CR (Coding Rate) for weak vs strong hops
-- [ ] Core: new framework for hosting multiple virtual nodes on one physical device
-- [ ] V2 protocol spec: discussion and consensus around V2 packet protocol, including path hashes, new encryption specs, etc
+* [X] Companion radio: UI redesign
+* [X] Repeater + Room Server: add ACL's (like Sensor Node has)
+* [X] Standardise Bridge mode for repeaters
+* [ ] Repeater/Bridge: Standardise the Transport Codes for zoning/filtering
+* [X] Core + Repeater: enhanced zero-hop neighbour discovery
+* [ ] Core: round-trip manual path support
+* [ ] Companion + Apps: support for multiple sub-meshes (and 'off-grid' client repeat mode)
+* [ ] Core + Apps: support for LZW message compression
+* [ ] Core: dynamic CR (Coding Rate) for weak vs strong hops
+* [ ] Core: new framework for hosting multiple virtual nodes on one physical device
+* [ ] V2 protocol spec: discussion and consensus around V2 packet protocol, including path hashes, new encryption specs, etc
 
 ## 📞 Get Support
 
-- Report bugs and request features on the [GitHub Issues](https://github.com/ripplebiz/MeshCore/issues) page.
-- Find additional guides and components on [my site](https://buymeacoffee.com/ripplebiz).
-- Join [MeshCore Discord](https://meshcore.gg) to chat with the developers and get help from the community.
+* Report bugs and request features on the [GitHub Issues](https://github.com/ripplebiz/MeshCore/issues) page.
+* Find additional guides and components on [my site](https://buymeacoffee.com/ripplebiz).
+* Join [MeshCore Discord](https://meshcore.gg) to chat with the developers and get help from the community.

@@ -19,7 +19,11 @@ MomentaryButton user_btn(PIN_USER_BTN, 1000, true);
 bool radio_init() {
   fallback_clock.begin();
 #if defined(PIN_BOARD_SDA) && defined(PIN_BOARD_SCL)
+  pinMode(PIN_BOARD_SDA, INPUT_PULLUP);
+  pinMode(PIN_BOARD_SCL, INPUT_PULLUP);
   Wire.begin(PIN_BOARD_SDA, PIN_BOARD_SCL);
+  Wire.setClock(100000);
+  Wire.setTimeOut(100);
 #else
   Wire.begin();
 #endif

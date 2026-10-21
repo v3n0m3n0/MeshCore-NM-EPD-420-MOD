@@ -1,3 +1,62 @@
+# MeshCore-NM-EPD-420-BW v1.18.0-mod-rev0.2 Release Notes
+
+**Target Hardware:** RockBase NM-EPD-420-BW (ESP32-S3R8, 16MB Flash, 8MB Octal PSRAM, 4.2" 400×300 B/W E-Paper SSD1683, Semtech SX1262 LoRa, AHT20 sensor).  
+**Branch:** `nm-epd-420-bw-mod`  
+**Base:** MeshCore Companion Firmware v1.18.0 (`81dbae5`, protocol version 14)  
+**Maintainer:** [@v3n0m3n0](https://github.com/v3n0m3n0)
+
+---
+
+## Podsumowanie wydania (v1.18.0-mod-rev0.2) / Executive Summary
+
+Wydanie **rev0.2** dla platformy **RockBase NM-EPD-420-BW** stanowi krytyczną aktualizację stabilności zasilania, ochrony baterii LiPo oraz niezawodności magistrali I2C i peryferiów pokładowych dla wszystkich 5 oficjalnych ról firmware'u MeshCore v1.18.0 (`companion_radio_ble`, `companion_radio_usb`, `repeater`, `room_server`, `kiss_modem`).
+
+Wprowadzone poprawki eliminują ryzyko rozładowania baterii poniżej bezpiecznego progu chemicznego, zjawisko pasożytniczego clamping-u magistrali I2C (ESD protection clamping) oraz prądy upływu w trybie głębokiego uśpienia (deep sleep).
+
+---
+
+## Szczegółowy wykaz wprowadzonych poprawek (rev0.2)
+
+### 1. Zatrzaski stanów GPIO w Deep Sleep i odcięcie zasilania LoRa (`SX126X_POWER_EN`)
+
+* **Cyfrowe zatrzaski GPIO (`gpio_deep_sleep_hold_en()`):** ESP32-S3 domyślnie po wejściu w `esp_deep_sleep_start()` przestawia piny GPIO spoza domeny RTC w stan wysokiej impedancji (floating / Hi-Z). Wprowadzono wywołanie `gpio_hold_en()` dla wszystkich kluczowych linii sterujących zasilaniem peryferiów:
+  * `AHTX0_POWER_PIN` (GPIO 40) – odcięcie zasilania sensora AHT20,
+  * `PIN_AMP_ENABLE` (GPIO 41) – wyciszenie wzmacniacza audio NS4150B,
+  * `PIN_ADC_CTRL` (GPIO 43) – rozłączenie klucza dzielnika napięcia baterii,
+  * `PIN_ES8311_POWER` (GPIO 44) – odcięcie zasilania kodeka audio,
+  * `SX126X_POWER_EN` (GPIO 47) – całkowite odcięcie zasilania modułu radiowego SX1262.
+* **Aktywacja globalnego zatrzasku cyfrowego:** Przed uśpieniem wywoływane jest `gpio_deep_sleep_hold_en()`, co trwale blokuje stany wyjść cyfrowych na czas snu układu, redukując prąd uśpienia do minimum i eliminując prądy upływu.
+* **Bezpieczne zwalnianie zatrzasków po wybudzeniu:** W procedurze `NMEPD420Board::begin()` dodano natychmiastowe zwalnianie zatrzasków (`gpio_deep_sleep_hold_dis()` oraz `gpio_hold_dis()` dla każdego pinu) zarówno przy starcie z deep sleep, jak i przy cold boot / WDT reset.
+* **Separacja magistrali LoRa i MicroSD:** Linie `P_LORA_NSS` (GPIO 8) oraz `PIN_SDCARD_CS` (GPIO 7) są trwale zatrzaskiwane w stanie wysokim w domenie RTC (`rtc_gpio_hold_en`), uniemożliwiając zakłócenie magistrali SPI przez kartę pamięci MicroSD.
+
+### 2. Bezpieczna sekwencja zasilania magistrali I2C przed `ESP32Board::begin()` (Anty-ESD Clamping)
+
+* **Zjawisko pasożytniczego clamping-u:** Magistrala I2C (SDA=GPIO 39, SCL=GPIO 38) jest współdzielona pomiędzy kodekiem audio ES8311 a sensorem AHT20. Pozostawienie szyn zasilających te układy w stanie odciętym (0V) przy jednoczesnym podciągnięciu linii SDA/SCL do 3.3V powoduje przewodzenie wewnętrznych diod zabezpieczających ESD tych układów do masy (parasitic ESD diode clamping), co ściąga napięcie na magistrali do ~0.6V i uniemożliwia komunikację I2C (błędy timeoutu).
+* **Sekwencja rozruchowa:** W `NMEPD420Board::begin()` zasilanie układu kodeka (`PIN_ES8311_POWER` GPIO 44) oraz sensora (`AHTX0_POWER_PIN` GPIO 40) jest załączane do stanu wysokiego (3.3V) **przed** wywołaniem inicjalizacji bazowej `ESP32Board::begin()`. Wzmacniacz audio (`PIN_AMP_ENABLE` GPIO 41) pozostaje wyłączony (LOW), co zapewnia zerowy pobór prądu przez tor audio przy zachowaniu pełnej sprawności magistrali I2C.
+
+### 3. Ochrona akumulatora LiPo i eliminacja drenowania przez klucz pomiarowy ADC
+
+* **Trzypunktowe progi napięciowe LiPo:** W konfiguracji platformy (`variants/nm_epd_420_bw/platformio.ini`) dodano ścisłe limity napięć:
+  * `AUTO_SHUTDOWN_MILLIVOLTS=3300` – automatyczne bezpieczne wyłączenie węzła / uśpienie przy spadku napięcia poniżej 3.30V (chroni ogniwo LiPo przed głębokim rozładowaniem i degradacją chemiczną poniżej dopuszczalnego progu 3.00V),
+  * `BATT_MIN_MILLIVOLTS=3000` – bezwzględne minimum napięcia odcięcia (0%),
+  * `BATT_MAX_MILLIVOLTS=4200` – nominalne pełne naładowanie (100%).
+* **Symetryczne wyłączanie klucza pomiarowego `PIN_ADC_CTRL` (GPIO 43):**
+  * Klucz tranzystorowy dzielnika napięcia baterii (P-MOSFET / N-MOSFET na GPIO 43) jest załączany (`digitalWrite(PIN_ADC_CTRL, HIGH)`) wyłącznie na czas 20 ms stabilizacji pojemności filtracyjnych (`BATT_SETTLE_MS = 20`) oraz 8-próbkowego uśrednianego pomiaru ADC.
+  * Bezpośrednio po zakończeniu próbkowania w `NMEPD420Board::readRawBattMilliVolts()`, klucz jest natychmiast rozłączany (`digitalWrite(PIN_ADC_CTRL, LOW)`).
+  * Eliminuje to ciągły upływ prądu przez dzielnik rezystancyjny 2:1 do masy, oszczędzając cenną energię akumulatora podczas pracy aktywnej oraz w uśpieniu.
+
+### 4. Natywna obsługa sensora AHT20 protokołem I2C (komenda 0xBE)
+
+* **Wyeliminowanie problemu biblioteki Adafruit AHTX0:** Standardowa biblioteka wysyła komendę kalibracji AHT10 (`0xE1, 0x08, 0x00`), podczas gdy sensor AHT20 bezwzględnie wymaga komendy `0xBE, 0x08, 0x00`. Skutkowało to brakiem ustawienia bitu kalibracji (bit 3 w rejestrze stanu 0x71) i sporadycznymi błędami inicjalizacji sensora po włączeniu zasilania.
+* **Bezpośrednia implementacja Wire:** W `NMEPD420EnvironmentSensorManager` zaimplementowano bezpośrednią obsługę protokołu I2C:
+  1. Sondowanie adresu I2C `0x38`.
+  2. Odczyt rejestru statusu (komenda `0x71`).
+  3. Jeśli bit kalibracji nie jest ustawiony (`(status & 0x08) == 0`), wysłanie właściwej sekwencji inicjalizacyjnej AHT20: `[0xBE, 0x08, 0x00]` i odczekanie 15 ms.
+  4. Wyzwolenie pomiaru komendą `[0xAC, 0x33, 0x00]` z 80 ms czasem konwersji.
+  5. 6-bajtowy odczyt z weryfikacją bitu zajętości (`status & 0x80 == 0`).
+
+---
+
 # MeshCore-NM-EPD-420-BW v1.18.0-mod-rev0.1 Release Notes
 
 **Target Hardware:** RockBase NM-EPD-420-BW (ESP32-S3R8, 16MB Flash, 8MB Octal PSRAM, 4.2" 400×300 B/W E-Paper SSD1683, Semtech SX1262 LoRa, AHT20 sensor).  
@@ -13,14 +72,15 @@ This release upgrades the custom RockBase NM-EPD-420-BW firmware from MeshCore v
 
 In addition to Companion BLE, this release compiles and packages the complete suite of **all 5 official MeshCore firmware roles** into pre-built, unified single-file `0x0` flashable binaries: **Companion Radio BLE**, **Companion Radio USB**, **Repeater**, **Room Server**, and **KISS Modem**.
 
-### Highlights:
+### Highlights
+
 - **Full 5-Role Firmware Suite:** Standalone unified `0x0` images for all 5 roles (`companion_radio_ble`, `companion_radio_usb`, `repeater`, `room_server`, `kiss_modem`), each sharing the board-level `-MOD` hardware foundation (80 MHz CPU, 15s TWDT, MicroSD CS `IO7` bus isolation, AHT20/battery non-blocking state machines, and SX1262 22 dBm ceiling).
-- **Upstream v1.18.0 Integration:** Full protocol v14 support including `CMD_RUN_CLI_COMMAND` (CLI over BLE/WiFi/Serial), zero-hop Node Discover UI (`HomePage::DISCOVERY`), and decoupled event listening via `MyMesh::Listener`.
-- **Preserved Core 0 Asynchronous E-Paper Refresh:** 16 MHz FSPI refresh task maintains sub-millisecond frame dispatch with zero CPU blocking on the main thread across all UI-enabled roles.
-- **Dynamic WiFi & BLE Support:** Dynamic WiFi interface with auto-reconnect and IP display, compatible with BLE coexistence on ESP32-S3.
-- **8 MB Octal PSRAM Offline Queue:** Large 256-frame offline message buffer in high-speed PSRAM with $O(1)$ ring buffer management.
-- **Interactive Multi-Role Flasher:** Upgraded `flash.ps1` and `flash.bat` with interactive menus allowing one-click flashing of any of the 5 roles.
-- **Hardware Button & Power Management:** 5-second `USER` button factory reset, physical `BOOT` ext0 deep sleep wakeup, and complete peripheral rail isolation.
+* **Upstream v1.18.0 Integration:** Full protocol v14 support including `CMD_RUN_CLI_COMMAND` (CLI over BLE/WiFi/Serial), zero-hop Node Discover UI (`HomePage::DISCOVERY`), and decoupled event listening via `MyMesh::Listener`.
+* **Preserved Core 0 Asynchronous E-Paper Refresh:** 16 MHz FSPI refresh task maintains sub-millisecond frame dispatch with zero CPU blocking on the main thread across all UI-enabled roles.
+* **Dynamic WiFi & BLE Support:** Dynamic WiFi interface with auto-reconnect and IP display, compatible with BLE coexistence on ESP32-S3.
+* **8 MB Octal PSRAM Offline Queue:** Large 256-frame offline message buffer in high-speed PSRAM with $O(1)$ ring buffer management.
+* **Interactive Multi-Role Flasher:** Upgraded `flash.ps1` and `flash.bat` with interactive menus allowing one-click flashing of any of the 5 roles.
+* **Hardware Button & Power Management:** 5-second `USER` button factory reset, physical `BOOT` ext0 deep sleep wakeup, and complete peripheral rail isolation.
 
 ---
 

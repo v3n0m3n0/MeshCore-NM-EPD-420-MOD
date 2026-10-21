@@ -46,7 +46,7 @@ if (-not $Port) {
 
 # 2. Firmware Role Selection
 $firmwareMap = @{
-    "0" = @{ Name = "Companion Radio BLE"; Pattern = "*companion_radio_ble*.bin"; Fallback = "MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.1.bin" }
+    "0" = @{ Name = "Companion Radio BLE"; Pattern = "*companion_radio_ble*.bin"; Fallback = "MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.2.bin" }
     "1" = @{ Name = "Companion Radio USB"; Pattern = "*companion_radio_usb*.bin"; Fallback = "" }
     "2" = @{ Name = "Repeater";            Pattern = "*repeater*.bin";            Fallback = "" }
     "3" = @{ Name = "Room Server";         Pattern = "*room_server*.bin";         Fallback = "" }
