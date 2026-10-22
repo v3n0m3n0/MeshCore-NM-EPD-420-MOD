@@ -92,13 +92,10 @@ if exist "!ESPTOOL_PY!" (
 )
 
 if %ERRORLEVEL% NEQ 0 (
-    echo.
     echo [ERROR] Flash failed! Please check COM port connection or put device into bootloader mode (Hold BOOT, press RESET).
     pause
     exit /b %ERRORLEVEL%
 )
 
-echo.
-echo [OK] Done! Your RockBase NM-EPD-420-BW is now running MeshCore-mod (!ROLENAME!).
-echo.
+echo [OK] Done! Your RockBase NM-EPD-420-BW is now running MeshCore-mod - !ROLENAME!.
 pause
