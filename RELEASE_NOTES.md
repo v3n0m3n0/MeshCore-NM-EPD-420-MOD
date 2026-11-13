@@ -47,6 +47,8 @@ Release **v1.18.0-mod-rev0.3** hardens ESP32-S3 hardware stability, RadioLib con
 | **Room Server** | `MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.3.bin` | 1 603 600 B | `963f9af36b4a87ccc6690ef4bbacf3a9b7e9ae5b3c773e647912a061b5e6107f` |
 | **KISS Modem** | `MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.3.bin` | 1 350 784 B | `d9c75fdf57fc9db3083d06e56fe13fadd5b10b7bf2252c0d4886233f0357c4fa` |
 
+> **Checksum note:** The hashes above correspond to the repository [`release/`](release/SHA256SUMS.txt) Windows build. Assets downloadable from the **`v1.18.0-mod-rev0.3` GitHub Release** are compiled cleanly by GitHub Actions (`ubuntu-latest`) and carry their own matching `SHA256SUMS.txt` attached to the release (`companion_radio_ble`: `b07f2888f61e8b86964c2881c6ae66c5969646cddb2c66c3bc619a94edde62de`, `companion_radio_usb`: `7aaceef7fbf3fe572b15edc6c85e7110ee88e14fed318da771629824dd38ae3d`, `repeater`: `148633cb03ae91136766429b08b7900ef832770877cf2a533146651fb307945a`, `room_server`: `c3460fa86802496c7fd391f4a400e393ae251f50dcc5624f3e96070eb0af67c7`, `kiss_modem`: `3883abe59b1e4b33065fb2687b607da97ef95615617d997cfbb5d32d5453eba0`).
+
 ---
 
 ## [v1.18.0-mod-rev0.2]
