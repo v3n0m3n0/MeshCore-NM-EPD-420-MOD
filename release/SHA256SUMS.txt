@@ -1,0 +1,10 @@
+f94c5d786a7a8fab06ac5d10e33bf37711a6697636dc037559ea19cc410a17f0  boot_app0.bin
+84a8e89c7bcc88d766c22a21181d6e64a3800d32bfb2608cc1897ac009cd415d  bootloader.bin
+31abc5d913198aac0093d56706ffbe6d9edf7d3639752ccfbebbd647e5c08b62  firmware.bin
+31abc5d913198aac0093d56706ffbe6d9edf7d3639752ccfbebbd647e5c08b62  MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.3.bin
+d96811cbd8b8fe5e812bb3079cb694b5f150f59c9429769e118d3452ba4b14b8  MeshCore-NM-EPD-420-BW-companion_radio_usb-v1.18.0-mod-rev0.3.bin
+d9c75fdf57fc9db3083d06e56fe13fadd5b10b7bf2252c0d4886233f0357c4fa  MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.3.bin
+ef5c2864219d999cb50af04a4469ddcab8c6d8e36aebd5a8b21ae5f5d94174c1  MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.3.bin
+963f9af36b4a87ccc6690ef4bbacf3a9b7e9ae5b3c773e647912a061b5e6107f  MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.3.bin
+31abc5d913198aac0093d56706ffbe6d9edf7d3639752ccfbebbd647e5c08b62  MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.3.bin
+bd0f7954aca2ef7d925ee21aaa1f3dc8822d1d6ce5cbbd26a135e5886bfff6ce  partitions.bin

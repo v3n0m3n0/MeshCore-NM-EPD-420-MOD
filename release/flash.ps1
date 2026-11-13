@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Flashes MeshCore -MOD firmware suite to RockBase NM-EPD-420-BW (ESP32-S3)
+    Flashes RockBase NM-EPD-420 MOD firmware suite to RockBase NM-EPD-420-BW (ESP32-S3)
 .PARAMETER Port
     Optional COM port (e.g. COM15). If omitted, scans for connected serial ports.
 .PARAMETER Role
@@ -13,7 +13,7 @@ param(
 )
 
 Write-Host "======================================================================" -ForegroundColor Cyan
-Write-Host "   MeshCore NM-EPD-420-BW (ESP32-S3) Firmware Flasher (PowerShell)    " -ForegroundColor Cyan
+Write-Host "   RockBase NM-EPD-420 MOD (ESP32-S3) Firmware Flasher (PowerShell)  " -ForegroundColor Cyan
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host ""
 

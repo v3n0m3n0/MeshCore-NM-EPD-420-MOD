@@ -137,4 +137,14 @@ if ($hasLeaks) {
     throw "Host path leak detected in generated release binaries! Check -fmacro-prefix-map / -ffile-prefix-map flags and perform a -Clean build."
 }
 
-Write-Host "`n[OK] All 5 roles built, merged, and verified clean for $Version." -ForegroundColor Green
+Write-Host "`n=== Generating release/SHA256SUMS.txt ===" -ForegroundColor Cyan
+$checksumTargets = Get-ChildItem -Path $releaseDir -Filter "*.bin" -File | Sort-Object Name
+$checksumLines = foreach ($f in $checksumTargets) {
+    $hash = (Get-FileHash -Path $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    "$hash  $($f.Name)"
+}
+$checksumPath = Join-Path $releaseDir "SHA256SUMS.txt"
+[System.IO.File]::WriteAllText($checksumPath, ($checksumLines -join "`n") + "`n", (New-Object System.Text.UTF8Encoding($false)))
+Write-Host "[OK] Wrote $checksumPath ($($checksumTargets.Count) entries)" -ForegroundColor Green
+
+Write-Host "`n[OK] All 5 roles built, merged, verified clean, and checksummed for $Version." -ForegroundColor Green

@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-title Flash MeshCore NM-EPD-420-BW Firmware Suite
+title Flash RockBase NM-EPD-420 MOD Firmware Suite
 
 :: Ensure UTF-8 execution to prevent esptool progress bar Unicode crashes on Windows (CP1250)
 set "PYTHONIOENCODING=utf-8"
@@ -8,7 +8,7 @@ set "PYTHONUTF8=1"
 chcp 65001 >nul 2>&1
 
 echo ======================================================================
-echo    MeshCore NM-EPD-420-BW (ESP32-S3) Firmware Suite Flasher
+echo    RockBase NM-EPD-420 MOD (ESP32-S3) Firmware Suite Flasher
 echo ======================================================================
 echo.
 
@@ -97,5 +97,5 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b %ERRORLEVEL%
 )
 
-echo [OK] Done! Your RockBase NM-EPD-420-BW is now running MeshCore-mod - !ROLENAME!.
+echo [OK] Done! Your RockBase NM-EPD-420-BW is now running RockBase NM-EPD-420 MOD - !ROLENAME!.
 pause
