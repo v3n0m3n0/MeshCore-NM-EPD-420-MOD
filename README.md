@@ -11,6 +11,20 @@
 
 ---
 
+## Latest Release: [`v1.18.0-mod-rev0.3`](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/releases/tag/v1.18.0-mod-rev0.3)
+
+**[Download `v1.18.0-mod-rev0.3` on GitHub Releases](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/releases/latest)** · **[Full Changelog (`RELEASE_NOTES.md`)](RELEASE_NOTES.md)** · **[Checksums (`SHA256SUMS.txt`)](release/SHA256SUMS.txt)** · **[Windows 1-Click Flashers](release/)**
+
+Key improvements introduced in **`v1.18.0-mod-rev0.3`**:
+
+- **Power Sequencing, Deep-Sleep ESD Isolation & WFI Sleep:** Ordered `SX126X_POWER_EN` (`IO47`) + Deep-Sleep SPI isolation (`SCLK`/`MOSI`/`RESET` -> `INPUT`, `NSS` latched `LOW`), interruptible `20 ms` WFI idle sleep replacing OPI-PSRAM light-sleep lockups, `USB_SERIAL_JTAG` SOF host detection (`isUsbPowered()`), `160 MHz` default CPU clock, and silent `GxEPD2` init.
+- **Non-Blocking Battery ADC & AHT20 State Machines:** Asynchronous `BattAdcState` pipeline + live `setAdcMultiplier()` calibration and `45 s` `AHT20` background I2C state machine keeping `TEMP_CTL` (`IO40`) stably powered in active mode.
+- **Thread-Safe RadioLib Driver & `crc_err` / `spi_err` Split:** ESP32 `portMUX_TYPE` spinlocks protecting `state` / `DIO1` ISR transitions, hardened `CustomSX1262Wrapper::setParams()` RX transitions (`SX126X_REGISTER_PATCH=1`), and separated LoRa CRC vs SPI fault counters (`StatsFormatHelper`).
+- **Cross-Role `RF HEALTH` Screen & microSD Libpcap Logger:** Shared `RF HEALTH` E-Paper diagnostic view (`Companion`, `Repeater`, `Room Server`) paired with `NMEPD420SDLogger` capturing `/mesh_capture.pcap` (`DLT_USER0=147`) and `/mesh_rf.log`, `sd *` CLI commands (`Repeater`/`Room Server`), and `Enter` mount retry (`Companion`).
+- **Host Interface & Build Hardening:** Repeater/Room Server USB CDC post-flash re-latch delay and 64-byte ZLP padding for Windows `usbser.sys`, `KissModem` startup radio macro synchronization, and verified `0`-leak prefix-mapped binaries across all 5 roles.
+
+---
+
 ## Available Firmware Roles
 
 All 5 roles share the unified board hardware abstraction (`NMEPD420Board`, `NMEPD420Display`, `NMEPD420EnvironmentSensorManager`, `NMEPD420SDLogger`, `NMEPD420RfHealthUI`, `CommonRadioPrefs`):
