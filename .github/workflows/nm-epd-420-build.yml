@@ -2,19 +2,45 @@ name: Build RockBase NM-EPD-420-BW
 
 on:
   push:
-    branches: [nm-epd-420-bw-mod]
+    branches: [main, nm-epd-420-bw-mod]
     tags:
       - 'v*'
   pull_request:
-    branches: [nm-epd-420-bw-mod]
+    branches: [main, nm-epd-420-bw-mod]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Optional existing tag (e.g. v1.18.0-mod-rev0.3) to publish/update a GitHub Release'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: write
 
 jobs:
-  build-nm-epd-420:
+  build-roles:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - env: NM_EPD_420_BW_companion_radio_ble
+            role: companion_radio_ble
+            is_default: true
+          - env: NM_EPD_420_BW_companion_radio_usb
+            role: companion_radio_usb
+            is_default: false
+          - env: NM_EPD_420_BW_repeater
+            role: repeater
+            is_default: false
+          - env: NM_EPD_420_BW_room_server
+            role: room_server
+            is_default: false
+          - env: NM_EPD_420_BW_kiss_modem
+            role: kiss_modem
+            is_default: false
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -26,20 +52,117 @@ jobs:
         run: |
           pip install "click<8.2.0"
 
-      - name: Build Merged Firmware
+      - name: Build Merged Firmware (${{ matrix.role }})
         run: |
-          pio run -e NM_EPD_420_BW_companion_radio_ble -t mergebin
+          export PLATFORMIO_BUILD_FLAGS="-fmacro-prefix-map=${GITHUB_WORKSPACE}=/workspace -ffile-prefix-map=${GITHUB_WORKSPACE}=/workspace -fmacro-prefix-map=${HOME}=/builder -ffile-prefix-map=${HOME}=/builder"
+          pio run -e "${{ matrix.env }}" -t mergebin
 
-      - name: Generate Checksums
+      - name: Stage & Verify Binary Cleanliness
+        shell: bash
+        env:
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          cd .pio/build/NM_EPD_420_BW_companion_radio_ble
-          sha256sum firmware-merged.bin > firmware-merged.bin.sha256
-          cat firmware-merged.bin.sha256
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            REL_VER="${GITHUB_REF#refs/tags/}"
+          elif [[ -n "${INPUT_RELEASE_TAG}" ]]; then
+            REL_VER="${INPUT_RELEASE_TAG}"
+          else
+            REL_VER="dev-${GITHUB_SHA::7}"
+          fi
 
-      - name: Upload Build Artifacts
+          BUILD_DIR=".pio/build/${{ matrix.env }}"
+          mkdir -p dist
+          OUT_NAME="MeshCore-NM-EPD-420-BW-${{ matrix.role }}-${REL_VER}.bin"
+          cp "${BUILD_DIR}/firmware-merged.bin" "dist/${OUT_NAME}"
+
+          if [[ "${{ matrix.is_default }}" == "true" ]]; then
+            cp "${BUILD_DIR}/firmware-merged.bin" "dist/MeshCore-NM-EPD-420-BW-${REL_VER}.bin"
+            cp "${BUILD_DIR}/firmware-merged.bin" "dist/firmware.bin"
+            [ -f "${BUILD_DIR}/bootloader.bin" ] && cp "${BUILD_DIR}/bootloader.bin" "dist/bootloader.bin"
+            [ -f "${BUILD_DIR}/partitions.bin" ] && cp "${BUILD_DIR}/partitions.bin" "dist/partitions.bin"
+          fi
+
+          python3 - <<'PY'
+          import pathlib, re, sys
+          pattern = re.compile(rb'(?i)([A-Z]:[/\\]+Users[/\\]|[/\\]Users[/\\][^/\\\x00]{1,40}[/\\]|/home/runner/)')
+          leaked = False
+          for p in sorted(pathlib.Path("dist").glob("*.bin")):
+              data = p.read_bytes()
+              hits = pattern.findall(data)
+              print(f"{p.name}: {len(data)} bytes | path leaks: {len(hits)}")
+              if hits:
+                  leaked = True
+          if leaked:
+              sys.exit(1)
+          PY
+
+      - name: Upload Role Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nm-epd-420-bw-firmware
-          path: |
-            .pio/build/NM_EPD_420_BW_companion_radio_ble/firmware-merged.bin
-            .pio/build/NM_EPD_420_BW_companion_radio_ble/firmware-merged.bin.sha256
+          name: role-${{ matrix.role }}
+          path: dist/*
+
+  package-suite:
+    needs: build-roles
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Built Role Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: role-*
+          merge-multiple: true
+          path: suite
+
+      - name: Bundle Flashers & Generate Checksums
+        shell: bash
+        run: |
+          cp release/boot_app0.bin suite/
+          cp release/flash.ps1 suite/
+          cp release/flash.bat suite/
+          cp release/README.md suite/
+          (
+            cd suite
+            LC_ALL=C ls -1 *.bin | sort -f | xargs sha256sum > SHA256SUMS.txt
+            cat SHA256SUMS.txt
+          )
+
+      - name: Upload Unified 5-Role Suite Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nm-epd-420-bw-suite
+          path: suite/*
+
+      - name: Prepare Release Body (Tagged Builds)
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
+        shell: bash
+        env:
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          TAG="${INPUT_RELEASE_TAG:-${GITHUB_REF_NAME}}"
+          python3 - "${TAG}" <<'PY'
+          import pathlib, re, sys
+          tag = sys.argv[1]
+          per_release = pathlib.Path(f"docs/releases/{tag}.md")
+          if per_release.is_file():
+              body = per_release.read_text(encoding="utf-8")
+          else:
+              notes = pathlib.Path("RELEASE_NOTES.md").read_text(encoding="utf-8")
+              m = re.search(rf"^## \[{re.escape(tag)}.*?\].*?(?=^## \[|\Z)", notes, flags=re.M | re.S)
+              if m:
+                  body = m.group(0).strip() + "\n"
+              else:
+                  body = f"# RockBase NM-EPD-420 MOD {tag}\n\nPre-built unified `0x0` binaries for all 5 roles.\n"
+          pathlib.Path("release_body.md").write_text(body, encoding="utf-8")
+          PY
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: "${{ inputs.release_tag || github.ref_name }}"
+          name: "RockBase NM-EPD-420 MOD ${{ inputs.release_tag || github.ref_name }}"
+          body_path: release_body.md
+          files: suite/*
