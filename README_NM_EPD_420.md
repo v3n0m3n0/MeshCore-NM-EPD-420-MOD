@@ -1,156 +1,158 @@
-# RockBase NM-EPD-420-BW v1.18.0-mod-rev0.3 Firmware Suite
+# RockBase NM-EPD-420 MOD — Hardware & Architecture Reference
 
-This repository is an optimized, hardware-verified modification of [MeshCore](https://github.com/meshcore-dev/MeshCore) providing full, production-ready support for the **RockBase NM-EPD-420** ESP32-S3 board with a **4.2-inch Black & White E-Paper display (GYE042A87 / SSD1683)** and **Semtech SX1262 LoRa transceiver**, compiled across all 5 official roles: **Companion Radio BLE**, **Companion Radio USB**, **Repeater**, **Room Server**, and **KISS Modem**.
-
----
-
-## Hardware Overview
-
-| Subsystem | Component | Specifications & Details |
-|---|---|---|
-| **MCU** | ESP32-S3R8 | Dual-Core Xtensa LX7 @ 80–240 MHz, **8 MB Octal PSRAM (OPI)**, **16 MB Quad Flash (QIO)** |
-| **Display** | 4.2" E-Paper | GYE042A87 panel (400 × 300 px), SSD1683 controller, 1-bit B/W, SPI interface |
-| **Radio (LoRa)** | Semtech SX1262 | Heltec HT-RA62 footprint, 868 / 915 MHz, native **+22 dBm** (+160 mW) max output |
-| **RF Switching** | Internal DIO2 | `SX126X_DIO2_AS_RF_SWITCH=true`, 1.8V TCXO on DIO3 |
-| **Sensors** | AHT20 | Temperature & relative humidity (I2C `0x38`), gated via `TEMP_CTL` (IO40) |
-| **Audio** | ES8311 + NS4150B | I2S audio codec (`0x18`) + Class-D speaker amp gated via `PA_CTRL` (IO41), PDM mic |
-| **Power & Battery**| LiPo Charger / ADC | USB-C charging, battery voltage divider 2:1 on ADC IO3 (gated via `ADC_EN` IO43) |
-| **Buttons** | Physical Buttons | `BOOT` = IO0 (RTC GPIO, active LOW), `USER` = IO45 (active LOW) |
+This document details the board-level engineering, GPIO mapping, power-sequencing rules, E-Paper rendering pipeline, RF telemetry, and build instructions for **RockBase NM-EPD-420 MOD** (targeting the **RockBase NM-EPD-420-BW** board on **MeshCore v1.18.0**).
 
 ---
 
-## Key Features & Fixes in This Fork
+## 1. Hardware Overview
 
-### 1. Modern PlatformIO Toolchain & Memory Mapping (`qio_opi`)
-* Uses `pioarduino 54.03.21` (Arduino-ESP32 3.2.1 + ESP-IDF 5.3) to resolve octal PSRAM boot-loops present in older Expressif32 cores.
-* Correctly configured memory flags: `board_build.arduino.memory_type = qio_opi` and 16 MB flash partition table (`default_16MB.csv`).
-* Automated unified binary script [`merge-bin.py`](merge-bin.py) creating a single 0x00000000 flashable image (`firmware-merged.bin`) containing bootloader, partitions, otadata, and application binary.
-
-### 2. Tailored 4.2" E-Paper UI Layout
-* Adapted the `ui-new` screen architecture for the 400×300 canvas.
-* Fixed baseline alignment and vertical spacing across the Home, Radio, Bluetooth, and Advert screens, preventing text collisions observed with smaller default displays.
-* Integrated hardware button navigation:
-  * `BOOT` button (IO0): Short press advances pages (`KEY_NEXT`), double-click selects (`KEY_SELECT`), long press confirms (`KEY_ENTER`).
-  * `USER` button (IO45): Short press navigates backwards (`KEY_PREV`).
-
-### 3. Polish UTF-8 Diacritics Transliteration Engine
-* Resolved an issue where non-ASCII characters were silently dropped by vector font renderers (`Adafruit_GFX` / `FreeSans`), causing words like `"żaba"` to display as `"aba"`.
-* Implemented a zero-allocation transliteration filter in [`src/helpers/ui/DisplayDriver.h`](src/helpers/ui/DisplayDriver.h) mapping all 18 Polish diacritics (`ą, ć, ę, ł, ń, ó, ś, ź, ż` / `Ą, Ć, Ę, Ł, Ń, Ó, Ś, Ź, Ż`) as well as European typographic marks (curved quotes, dashes, ellipsis) directly to clean ASCII equivalents.
-
-### 4. Persistent Bluetooth LE Bonding & Secure Factory Reset
-* Fixed repeated PIN pairing prompts across power cycles by eliminating aggressive NVS bond erasure in [`SerialBLEInterface::begin()`](src/helpers/esp32/SerialBLEInterface.cpp).
-* BLE PIN is randomly generated once upon first initialization and persisted permanently in `_prefs.ble_pin` until explicitly reset.
-* Three factory reset mechanisms:
-  * **App Reset:** Over BLE via companion app (`CMD_FACTORY_RESET`).
-  * **CLI Reset:** Serial terminal command `erase`.
-  * **Hardware Fail-Safe:** Hold the physical `USER` button (IO45) for **5 seconds** during device power-up to wipe all BLE bonds, erase LittleFS configuration, and restore factory defaults.
-
-### 5. RF Power Verification (SX1262 Max 22 dBm)
-* Configured default and maximum transmit power to **+22 dBm** (`-D LORA_TX_POWER=22`, `-D MAX_LORA_TX_POWER=22`).
-* Verified against hardware schematics: The board uses a bare Semtech SX1262 (HT-RA62) without an external RF Front-End Module (FEM) like the KCT8103L (which provides ~28 dBm on some other Heltec models). The RadioLib driver enforces a silicon ceiling of +22 dBm for safe, stable transmission.
-
-### 6. Offline Message Queue Architecture (`MSG: 0`)
-* The home screen `MSG: %d` counter reflects the state of the radio's **offline buffer (`offline_queue_len`)**.
-* When the paired phone is connected via BLE, incoming messages are immediately streamed to the mobile client via `PUSH_CODE_MSG_WAITING` and `CMD_SYNC_NEXT_MESSAGE`, draining the radio's offline queue to 0 in ~20 ms.
-* When the phone is disconnected, the device queues incoming messages in local memory and increments `MSG: %d` until reconnected.
-
-### 7. Performance, Concurrency & Power Management
-* **Asynchronous Core 0 E-Paper Refresh Engine & 16 MHz FSPI:** Offloaded blocking `GxEPD2` screen updates (~600 ms partial / ~2.2s full) to a dedicated FreeRTOS task pinned to Core 0 and increased the FSPI clock from 4 MHz to 16 MHz. The main application loop (`the_mesh`, BLE, and button polling) runs with zero display-induced blocking (<1 ms frame commit).
-* **Two-Stage Non-Blocking Battery ADC & AHT20 State Machines:** Replaced synchronous warmup/settle delays with `millis()`-driven state machines: a 45 s background AHT20 I2C cycle keeping `TEMP_CTL` (IO40) stably powered during runtime, and a `BattAdcState` pipeline supporting runtime `setAdcMultiplier()` calibration.
-* **Shared HSPI Bus MicroSD Guard (`PIN_SDCARD_CS` IO7) & Deep Sleep Pin Isolation:** Explicitly drives and RTC-latches `SD_CS` (GPIO 7) HIGH, isolates SX1262 SPI lines before cutting `SX126X_POWER_EN` (IO47) in Deep Sleep to prevent ESD back-powering, and uses interruptible WFI idle slices (`sleep()`) paired with USB-Serial/JTAG SOF host detection (`isUsbPowered()`, 5 s holdoff) to keep RX active and avoid OPI PSRAM Light Sleep lockups.
-* **$O(1)$ Circular Ring Buffers & PSRAM Queue Allocation:** Converted `offline_queue` (256 frames, allocated in 8 MB Octal PSRAM to free ~44.5 KB of internal SRAM) and `SerialBLEInterface::send_queue` (expanded 4x from 4 to 16 frames) from $O(N)$ shifting arrays to $O(1)$ ring buffers.
-* **$O(\log K)$ Binary-Search Text Ellipsizing & Extended UTF-8 Symbols:** Replaced character-by-character width probing in `drawTextEllipsized()` with binary search and added `0xC2` symbol transliteration (`°`, `±`, `²`, `³`, `µ`, `·`, NBSP).
-* **Bidirectional Unread Message Navigation & `X/Y` Pagination:** Added `Unread: X/Y` position counter on `MsgPreviewScreen`, mapped single-click `USER` (`KEY_PREV`) to step backward to newer messages (instead of wiping the queue), and added on-screen visual feedback during the 5-second `USER` button hardware factory reset.
-* **160 MHz MCU Clock & Windows USB CDC CLI Reliability:** Tuned ESP32-S3 CPU frequency to 160 MHz for deterministic LoRa/BLE/display headroom, silenced verbose GxEPD2 init serial chatter, added flash-write CDC re-latch wait, and avoided exact 64-byte USB CDC ZLP boundary stalls on Repeater and Room Server CLI responses.
-* **Hardware Anti-Ghosting on Demand & RF Noise Floor Quantization:** Double-clicking `USER` (IO45) forces a full E-Paper refresh; quantized SX1262 noise floor to 3 dBm steps on the RADIO and RF HEALTH pages.
-
-### 8. RF Health Telemetry, RadioLib Reliability & microSD Libpcap Logger (v1.18.0-mod-rev0.3)
-* **Thread-Safe RadioLib State & Separate CRC / SPI Diagnostics:** Added ESP32 `portMUX_TYPE` critical-section protection (`IRAM` ISR + main loop) around RadioLib interrupt/state transitions, safe `setParams()` reconfiguration (standby -> apply params -> restore `setRxBoostedGainMode()` -> resume RX), and separated `crc_err` from `spi_err` in radio JSON telemetry.
-* **Cross-Role `RF HEALTH` E-Paper View (`NMEPD420RfHealthUI`):** Added an on-device diagnostic screen (`RF HEALTH`) across Companion Radio (`HomeScreen` carousel), Repeater, and Room Server displaying noise floor, last RSSI/SNR, `RX / CRC / SPI` packet counters, TX/RX airtime, remaining duty budget (`af`), live `mV` / ADC multiplier / `USB|BAT` source, and microSD logger status.
-* **Shared-HSPI microSD RF Packet Logger (`NMEPD420SDLogger`):** Optional zero-blocking 32-entry RAM ring buffer that arbitrates HSPI (`P_LORA_NSS` IO8 vs `PIN_SDCARD_CS` IO7) when a FAT32 microSD card is present to append `/mesh_capture.pcap` (Wireshark `DLT_USER0 = 147`) and `/mesh_rf.log`, controllable via `sd status|retry|on|off|clear|pcap-test|ring-test` CLI commands or `Enter` on Companion `RF HEALTH`.
-* **EU868 10% Duty Budget Note & KISS Modem Sync:** Seeded initial KISS modem radio config from build macros (`LORA_FREQ`, `LORA_BW`, `LORA_SF`, `LORA_CR`, `LORA_TX_POWER`), enabled `SX126X_REGISTER_PATCH=1`, and documented `set af 9` for EU868 g3 10% duty-cycle operation.
-
-### 9. Future Optimization Backlog
-* **I2S Audio Notification Synthesizer (ES8311 + NS4150B):** Implement a lightweight zero-idle-drain I2S tone generator driving the onboard ES8311 codec (`0x18`, `CODEC_EN` IO44) and NS4150B amplifier (`PA_CTRL` IO41) for audible message alerts (`UITask::notify()`).
-* **Filesystem Migration (`SPIFFS` -> `LittleFS`):** Migrate `DataStore` storage on ESP32 from deprecated `SPIFFS` to `LittleFS` for faster contact/blob I/O, superior wear-leveling, and power-loss resilience (with an automated one-time migration path for existing `/contacts` and identity files).
+| Subsystem | Component / Specification | Integration Notes |
+| --- | --- | --- |
+| **MCU** | ESP32-S3R8 (Dual-core Xtensa LX7 @ 160 MHz) | `qio_opi` memory mode, hardware USB-Serial/JTAG CDC |
+| **Flash** | 16 MB QIO/DIO (`default_16MB.csv`) | Unified `0x0` images (`bootloader + partitions + boot_app0 + app`) |
+| **PSRAM** | 8 MB Octal PSRAM (OPI) | Hosts the 256-frame Companion `offline_queue` |
+| **Display** | 4.2" B/W E-Paper (`GYE042A87` / `SSD1683`, `400x300`) | Asynchronous Core 0 FreeRTOS task on `16 MHz` FSPI (`NMEPD420Display`) |
+| **LoRa Radio** | Semtech `SX1262` (+22 dBm max, `1.8V` TCXO via DIO3) | Shared HSPI with `P_LORA_NSS=IO8`, `LORA_EN=IO47`, `DIO2` RF switch, register patch |
+| **Storage** | microSD Card Slot (FAT32 on shared HSPI) | `SD_CS=IO7` RTC-held HIGH when idle/sleeping; zero-blocking `NMEPD420SDLogger` |
+| **Env Sensor** | `AHT20` Temperature & Humidity (I2C `0x38`) | Native `0xBE` init, runtime `TEMP_CTL=IO40` rail gating |
+| **Battery** | LiPo 1S via 2:1 resistive divider (`IO3`, `ADC_EN=IO43`) | Non-blocking 8-sample ADC pipeline + 12-point OCV curve |
+| **Audio** *(HW ready)* | `ES8311` codec (`IO44`) + `NS4150B` PA (`IO41`) | Power-gated OFF by default; planned for upcoming I2S alerts |
 
 ---
 
-## Pin Mapping Summary
+## 2. Firmware Roles & Feature Matrix
 
-```
-FSPI (EPD Display):
-  SCK   -> IO2
-  MOSI  -> IO1
-  CS    -> IO46
-  DC    -> IO4
-  RST   -> IO5
-  BUSY  -> IO6
+All 5 PlatformIO environments inherit from `[NM_EPD_420_BW_base]` in [`variants/nm_epd_420_bw/platformio.ini`](variants/nm_epd_420_bw/platformio.ini):
 
-HSPI (SX1262 LoRa + MicroSD shared bus):
-  SCK   -> IO9
-  MOSI  -> IO10
-  MISO  -> IO11
-  NSS   -> IO8
-  RESET -> IO12
-  BUSY  -> IO13
-  DIO1  -> IO14
-  SD_CS -> IO7
+| PlatformIO Environment | Role | UI Display | Comms Interface | microSD Logging |
+| --- | --- | --- | --- | --- |
+| `NM_EPD_420_BW_companion_radio_ble` | Companion Radio BLE *(default)* | 400x300 Carousel + Unread + Discovery + `RF HEALTH` | BLE (`123456`) + WiFi Station + USB Serial | `RX_RAW` + `Enter` retry on `RF HEALTH` |
+| `NM_EPD_420_BW_companion_radio_usb` | Companion Radio USB | 400x300 Carousel + Unread + Discovery + `RF HEALTH` | USB CDC Serial (`ENABLE_USB_INTERFACE`) | `RX_RAW` + `Enter` retry on `RF HEALTH` |
+| `NM_EPD_420_BW_repeater` | Repeater (`MAX_NEIGHBOURS=50`) | Status + `RF HEALTH` page | LoRa Relay + USB CDC / Remote CLI | `RX_RAW`, `TX_PKT`, `TX_FAIL` + `sd *` CLI |
+| `NM_EPD_420_BW_room_server` | Room Server (Micro-BBS) | Status + `RF HEALTH` page | LoRa BBS + USB CDC / Remote CLI | `RX_RAW`, `TX_PKT`, `TX_FAIL` + `sd *` CLI |
+| `NM_EPD_420_BW_kiss_modem` | KISS Modem (Serial TNC) | Headless (display & PA off) | USB KISS Serial Bridge | `RX_RAW`, `TX_PKT`, `TX_FAIL` |
+
+---
+
+## 3. Core Architecture & Hardware Fixes
+
+### 3.1. Asynchronous Core 0 E-Paper Display Engine (`NMEPD420Display`)
+
+1. **Full `400x300` Panel Utilization:** Uses `GxEPD2_420_GYE042A87` at logical `200x150` with `2.0x` scaling (`DISPLAY_ROTATION=0`), eliminating 72 px unused margins. Dynamic vertical centering (`NM_DY`) keeps Home screens balanced across the 4.2" canvas.
+2. **Non-Blocking Core 0 Refresh Task (`epdRefreshTask`):** Main loop UI rendering writes into RAM and posts a frame notification in `<1 ms`, while FSPI transfers (`16 MHz`), BUSY polling (~600 ms partial / ~2.2 s full), and `display.powerOff()` charge-pump shutdown execute on Core 0 without blocking LoRa or BLE packet handling.
+3. **Refresh Storm & Ghosting Protection:**
+   * Hardware `CRC32` frame caching skips redundant physical updates when screen bytes are unchanged.
+   * Full window refresh runs automatically every `30` partial cycles (or immediately on `BOOT`/`USER` double-click via `forceFullRefresh()`).
+   * Messages under 60 seconds display static `"now"` on Unread and Recent views to avoid 1 Hz CRC invalidation storms.
+4. **Polish / Extended UTF-8 Support:** Transliterates Polish diacritics (`ą ć ę ł ń ó ś ź ż`) and `0xC2`/`0xE2` punctuation (`°`, `±`, `²`, `³`, `µ`, `·`, NBSP, em-dash, quotes) in `DisplayDriver`, with `O(log K)` binary-search ellipsizing and strict multi-byte truncation safety.
+
+### 3.2. Power Sequencing, Sleep Safety & Battery Telemetry (`NMEPD420Board`)
+
+* **SX1262 Power Sequencing & Deep Sleep Pin Isolation:** Drives `SX126X_POWER_EN` (`IO47`) HIGH and waits for VDD + 1.8V TCXO stabilization before asserting SPI CS pins (`P_LORA_NSS=IO8`). Before entering Deep Sleep (`EXT0` on `BOOT IO0` LOW, `EXT1` on LoRa `DIO1 IO14` HIGH), isolates `SCLK`, `MOSI`, `RESET`, and `NSS` and RTC-holds `SD_CS` (`IO7`) HIGH prior to cutting `IO47` to eliminate parasitic ESD diode back-powering.
+* **GPIO Hold & I2C ESD Clamp Prevention:** Unlatches digital pad holds at wake (`gpio_hold_dis()`), powers peripheral rails (`CODEC_EN=IO44`, `TEMP_CTL=IO40`) cleanly relative to I2C init (`SDA=IO39`, `SCL=IO38`), and holds power gates OFF in deep sleep.
+* **Safe WFI Idle Sleep + USB SOF Detection:** Replaces OPI-PSRAM `esp_light_sleep_start()` lockups with interruptible `20 ms` WFI slices (`sleep()`) alongside `USB_SERIAL_JTAG` SOF frame-index tracking (`isUsbPowered()`, `5s` holdoff) and adaptive 15s Task Watchdog Timer (`esp_task_wdt_reconfigure()`).
+* **LiPo ADC & Safety Thresholds:** Runs an ESP32-S3 priming throwaway read before `ADC_11db` attenuation, waits `20 ms` RC divider settling on `IO43` via non-blocking `BattAdcState`, averages 8 samples spaced `150 µs` apart, disables `IO43` immediately to eliminate divider drain, maps voltage via a 12-point non-linear OCV curve (`3000–4200 mV`, `AUTO_SHUTDOWN_MILLIVOLTS=3300`), and allows live calibration via `setAdcMultiplier()`.
+
+### 3.3. RadioLib Concurrency & `RF HEALTH` Telemetry
+
+* **Critical Sections:** `RadioLibWrapper` protects shared state transitions and `DIO1` ISR flags with ESP32 `portMUX_TYPE` spinlocks (`portENTER_CRITICAL(_ISR)`).
+* **Safe Live Parameter Switching:** `CustomSX1262Wrapper::setParams()` transitions cleanly through `idle()`/`standby()`, preserves `SX126X_RX_BOOSTED_GAIN`, recalculates preamble/payload timers, and resumes RX only if active prior to switching.
+* **Error Separation:** Splits `crc_err` (LoRa CRC/header mismatches) from `spi_err` (modem/SPI faults) in telemetry structs (`StatsFormatHelper`) and displays both on [`NMEPD420RfHealthUI.h`](variants/nm_epd_420_bw/NMEPD420RfHealthUI.h).
+* **On-Device `RF HEALTH` Page:** Displays frequency/SF, 3 dBm quantized noise floor, last RSSI/SNR, `RX / CRC / SPI` packet counts, TX/RX airtime totals, remaining duty-cycle budget (`af`), live battery `mV` / ADC multiplier / `USB|BAT` source, and microSD logger status.
+
+### 3.4. Shared-HSPI microSD Libpcap RF Logger (`NMEPD420SDLogger`)
+
+* **Non-Blocking Ring Buffer:** Captures up to `32` frames (`RfDir`: `RX_RAW`, `RX_PKT`, `TX_PKT`, `TX_FAIL`, `264 B` snaplen) in RAM before arbitrating the shared HSPI bus (`P_LORA_NSS` `IO8` vs `PIN_SDCARD_CS` `IO7`) whenever the radio is idle (`!radio_driver.isInRecvMode()`), flushing in small batches (`2` records / `250 ms` interval or `8` threshold).
+* **Capture Formats:** Appends binary Wireshark-compatible Libpcap packets to `/mesh_capture.pcap` (`PCAP_DLT_USER0 = 147`) and human-readable lines to `/mesh_rf.log`.
+* **CLI (`Repeater` / `Room Server`):** `sd status`, `sd retry`, `sd on`, `sd off`, `sd clear`, `sd pcap-test`, `sd ring-test`. On Companion roles, pressing `USER` (`KEY_ENTER`) on the `RF HEALTH` page triggers `sd_logger.retryMount()`.
+
+### 3.5. Memory, BLE Stability & Host Interface
+
+* **Octal PSRAM Offline Queue:** Allocates the 256-frame `offline_queue` in 8 MB Octal PSRAM using an $O(1)$ circular ring buffer, keeping internal SRAM free for BLE + WiFi coexistence.
+* **BLE Pairing Bond Wipe & Visual Reset Feedback:** Holding `USER` (`IO45`) for 5 seconds on Companion BLE startup clears the `esp_ble` bonding table and NVS pairing store with on-screen progress prompts. `SerialBLEInterface::send_queue` uses a 16-frame $O(1)$ circular buffer.
+* **USB CDC Reliability:** Repeater and Room Server roles flush post-flash CDC re-latch delays (`flash_write`) and pad 64-byte multiples cleanly to prevent Windows USB-Serial/JTAG ZLP stalls during CLI transfers.
+* **EU868 g3 Duty Cycle (`869.618 MHz`):** Configure `set af 9` via CLI (`duty_cycle = 1 / (1 + airtime_factor)`, bounding airtime budget to 10%).
+
+---
+
+## 4. Pin Mapping Reference
+
+Verified against [`variants/nm_epd_420_bw/platformio.ini`](variants/nm_epd_420_bw/platformio.ini) and [`boards/nm-epd-420-bw.json`](boards/nm-epd-420-bw.json):
+
+```text
+EPD E-Paper (FSPI, 16 MHz):
+  SCK      -> IO2
+  MOSI     -> IO1
+  MISO     -> -1 (not used)
+  CS       -> IO46
+  DC       -> IO4
+  RST      -> IO5
+  BUSY     -> IO6
+
+SX1262 LoRa + microSD (Shared HSPI):
+  SCK      -> IO9
+  MOSI     -> IO10
+  MISO     -> IO11
+  NSS      -> IO8
+  RESET    -> IO12
+  BUSY     -> IO13
+  DIO1     -> IO14 (RTC GPIO, EXT1 Deep Sleep Wakeup)
+  LORA_EN  -> IO47 (SX1262 + TCXO power rail)
+  SD_CS    -> IO7  (microSD CS, RTC-held HIGH when idle/sleeping)
 
 I2C Bus (AHT20 + ES8311):
-  SDA   -> IO39
-  SCL   -> IO38
+  SDA      -> IO39
+  SCL      -> IO38
 
 Power Gating (Active HIGH):
-  TEMP_CTL -> IO40  (AHT20 sensor power)
-  PA_CTRL  -> IO41  (NS4150B audio amplifier)
-  ADC_EN   -> IO43  (Battery voltage measurement)
-  CODEC_EN -> IO44  (ES8311 audio codec power)
-  LORA_EN  -> IO47  (SX1262 radio power)
+  TEMP_CTL -> IO40 (AHT20 VDD)
+  PA_CTRL  -> IO41 (NS4150B audio amplifier)
+  ADC_EN   -> IO43 (Battery voltage divider switch)
+  CODEC_EN -> IO44 (ES8311 audio codec VDD)
 
 Buttons & Battery:
-  BOOT_BTN -> IO0   (Active LOW, external pull-up)
-  USER_BTN -> IO45  (Active LOW, external pull-up)
-  BATT_ADC -> IO3   (ADC1_CH2, 2:1 voltage divider)
+  BOOT_BTN -> IO0  (Active LOW, RTC GPIO 0, EXT0 Deep Sleep Wakeup)
+  USER_BTN -> IO45 (Active LOW, Digital GPIO)
+  BATT_ADC -> IO3  (ADC1_CH2, 2:1 resistive divider)
 ```
 
 ---
 
-## Building and Flashing
+## 5. Building & Flashing
 
-### Environment
-* PlatformIO Core (`pio` 6.x+)
-* Target environment: **`NM_EPD_420_BW_companion_radio_ble`**
+### Full 5-Role Release Build (Recommended on Windows)
 
-### Build Single Merged Firmware Image
+```powershell
+.\build_and_release.ps1 -Version v1.18.0-mod-rev0.3 -Clean
+```
+
+Generates unified `0x0` `.bin` images in [`release/`](release/), checks all outputs for host filesystem path leaks (`-fmacro-prefix-map` / `-ffile-prefix-map`), and updates [`release/SHA256SUMS.txt`](release/SHA256SUMS.txt).
+
+### Single-Target PlatformIO Build
+
 ```bash
+# Replace env with any of the 5 NM_EPD_420_BW_* targets in variants/nm_epd_420_bw/platformio.ini
 pio run -e NM_EPD_420_BW_companion_radio_ble -t mergebin
 ```
-The unified binary will be generated at:
-`.pio/build/NM_EPD_420_BW_companion_radio_ble/firmware-merged.bin`
 
-### Flash to Device (e.g., COM15 on Windows or /dev/ttyACM0 on Linux)
+Flash output `.pio/build/<env>/firmware-merged.bin` at `0x0`:
+
 ```bash
-python -m esptool --port COM15 --chip esp32s3 write_flash 0x0 .pio/build/NM_EPD_420_BW_companion_radio_ble/firmware-merged.bin
+python -m esptool --port COM15 --baud 921600 --chip esp32s3 --after watchdog-reset write_flash 0x0 .pio/build/NM_EPD_420_BW_companion_radio_ble/firmware-merged.bin
 ```
 
-### Critical ESP32-S3 Watchdog Reset Fix
-Because ESP32-S3 USB-Serial/JTAG can remain latched in download mode after an upload, trigger a clean software restart using:
+If USB-Serial/JTAG holds the ESP32-S3 in ROM bootloader mode after upload, issue:
+
 ```bash
 python -m esptool --port COM15 --before no-reset --after watchdog-reset flash_id
 ```
 
 ---
 
-## Upstream References and Credits
+## 6. Upstream References & Roadmap
 
-* **Upstream Project:** [meshcore-dev/MeshCore](https://github.com/meshcore-dev/MeshCore) — The original decentralized mesh networking protocol and firmware.
-* **Vendor Reference Fork:** [RockBase-iot/meshcore (branch nm-epd-420)](https://github.com/RockBase-iot/meshcore/tree/nm-epd-420) — Initial vendor bring-up branch.
-* **Hardware & Schematics Repository:** [RockBase-iot/NM-EPD-420](https://github.com/RockBase-iot/NM-EPD-420) — Official schematics, pin maps, and hardware documentation.
-* **Maintainer of this Fork:** [@v3n0m3n0](https://github.com/v3n0m3n0)
-
----
-
-## License
-
-This project is licensed under the MIT License, consistent with upstream MeshCore. See [`license.txt`](license.txt) for full details.
+* **Project Homepage & Roadmap:** [`README.md`](README.md#development-roadmap-rockbase-nm-epd-420-mod)
+* **Full Changelog:** [`RELEASE_NOTES.md`](RELEASE_NOTES.md)
+* **Upstream MeshCore:** [`meshcore-dev/MeshCore`](https://github.com/meshcore-dev/MeshCore)
+* **Vendor Hardware Docs & Reference Fork:** [`RockBase-iot/NM-EPD-420`](https://github.com/RockBase-iot/NM-EPD-420) · [`RockBase-iot/meshcore`](https://github.com/RockBase-iot/meshcore/tree/nm-epd-420)
+* **Maintainer:** [@v3n0m3n0](https://github.com/v3n0m3n0) · **License:** MIT ([`license.txt`](license.txt))

@@ -1,173 +1,196 @@
-# RockBase NM-EPD-420 MOD — MeshCore Firmware Suite (v1.18.0-mod-rev0.3)
+# RockBase NM-EPD-420 MOD — MeshCore Multi-Role Firmware Suite
 
-> [!NOTE]
-> **Complete Hardware & Firmware MOD Suite (`v1.18.0-mod-rev0.3`)**  
-> This repository provides an optimized, hardware-verified firmware suite of **MeshCore v1.18.0** for the **RockBase NM-EPD-420-BW** board (ESP32-S3R8 + 4.2" 400×300 B/W E-Paper + SX1262 LoRa + AHT20), with **all 5 official roles** pre-compiled and packaged into unified single-file `0x0` flashable binaries.
+[![Build RockBase NM-EPD-420-BW](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/actions/workflows/nm-epd-420-build.yml/badge.svg)](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/actions/workflows/nm-epd-420-build.yml)
+[![Run Unit Tests](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/actions/workflows/run-unit-tests.yml/badge.svg)](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/actions/workflows/run-unit-tests.yml)
+[![Latest Release](https://img.shields.io/github/v/release/v3n0m3n0/MeshCore-NM-EPD-420-MOD?include_prereleases&label=release)](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/releases)
+[![Upstream Base](https://img.shields.io/badge/MeshCore%20Base-v1.18.0%20(proto%20v14)-blue)](https://github.com/meshcore-dev/MeshCore)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](license.txt)
 
-### 📦 Available Firmware Roles (-MOD Suite)
-
-All 5 roles share the custom hardware layer (`NMEPD420Board`, `NMEPD420Display`, `NMEPD420EnvironmentSensorManager`, `NMEPD420SDLogger`, `CommonRadioPrefs`):
-
-| Role | Unified Binary (`0x0`) | Size | Key Capabilities & Hardware Features |
-| --- | --- | :---: | --- |
-| **Companion Radio BLE** | [`MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.3.bin)<br>*(alias: `MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.3.bin`)* | ~2.01 MB | Mobile App connectivity via BLE, dynamic WiFi station, interactive Companion CLI (`CMD_RUN_CLI_COMMAND`), `RF HEALTH` E-Paper telemetry page, optional FAT32 microSD Libpcap (`DLT_USER0=147`) RF logger, zero-hop Node Discover UI (`HomePage::DISCOVERY`), 400×300 Core 0 Async E-Paper, 256 offline queue in PSRAM, AHT20 & battery telemetry, 5s factory reset. |
-| **Companion Radio USB** | [`MeshCore-NM-EPD-420-BW-companion_radio_usb-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-companion_radio_usb-v1.18.0-mod-rev0.3.bin) | ~1.46 MB | Desktop / Laptop companion via USB CDC serial terminal or web app, `RF HEALTH` E-Paper telemetry page, microSD Libpcap logger, 400×300 Core 0 Async E-Paper, 256 offline queue in PSRAM, AHT20 & battery telemetry. |
-| **Repeater** | [`MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.3.bin) | ~1.61 MB | Autonomous field / solar packet repeater, live status + `RF HEALTH` E-Paper page, optional microSD Libpcap logger + `sd *` CLI, thread-safe RadioLib ISR state, 160 MHz MCU + WFI idle sleep, USB CDC ZLP guard, shared HSPI MicroSD CS isolation, TCXO SX1262 (+22 dBm). |
-| **Room Server** | [`MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.3.bin) | ~1.60 MB | Micro-BBS room server for shared channels and bulletin posts, live status + `RF HEALTH` E-Paper page, optional microSD Libpcap logger + `sd *` CLI, 160 MHz MCU + WFI idle sleep, USB CDC ZLP guard, shared HSPI MicroSD CS isolation, TCXO SX1262 (+22 dBm). |
-| **KISS Modem** | [`MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.3.bin) | ~1.35 MB | Serial KISS TNC bridge for AX.25, APRS, TCP/IP, or Python hosts, synced build-macro radio defaults, optional microSD Libpcap RX/TX logging, headless operation (display & audio PA disabled), 160 MHz MCU, shared HSPI MicroSD CS isolation. |
-
-> 🚀 **1-Click Flasher & Binaries:** Available in [`release/`](release/) (`flash.ps1` / `flash.bat` with interactive role selection)  
-> 📄 **Technical Specs & Full Changelog:** [RELEASE_NOTES.md](RELEASE_NOTES.md) | [README_NM_EPD_420.md](README_NM_EPD_420.md) | [release/README.md](release/README.md)
+> **RockBase NM-EPD-420 MOD (`v1.18.0-mod-rev0.3`)**  
+> Hardware-verified, path-anonymized firmware modification of **MeshCore v1.18.0** for the **RockBase NM-EPD-420-BW** board (ESP32-S3R8, 16 MB Flash, 8 MB Octal PSRAM, 4.2" 400x300 B/W E-Paper SSD1683, Semtech SX1262 TCXO LoRa, AHT20, microSD), compiled into standalone single-file `0x0` images for **all 5 MeshCore roles**.
 
 ---
 
-## About MeshCore
+## Available Firmware Roles
 
-MeshCore is a lightweight, portable C++ library that enables multi-hop packet routing for embedded projects using LoRa and other packet radios. It is designed for developers who want to create resilient, decentralized communication networks that work without the internet.
+All 5 roles share the unified board hardware abstraction (`NMEPD420Board`, `NMEPD420Display`, `NMEPD420EnvironmentSensorManager`, `NMEPD420SDLogger`, `NMEPD420RfHealthUI`, `CommonRadioPrefs`):
 
-## 🔍 What is MeshCore?
+| Role | Unified Binary (`0x0`) | Size | Interfaces | Key Features |
+| --- | --- | :---: | --- | --- |
+| **Companion Radio BLE** | [`MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.3.bin)<br>*(alias: [`MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.3.bin))* | ~2.01 MB | BLE, WiFi, USB Serial | Mobile app connectivity, `CMD_RUN_CLI_COMMAND`, `RF HEALTH` E-Paper telemetry, optional FAT32 microSD Libpcap (`DLT_USER0=147`) RX logger, `HomePage::DISCOVERY`, Core 0 Async E-Paper, 256-msg Octal PSRAM queue, AHT20 + LiPo ADC, 5s `USER` bond wipe |
+| **Companion Radio USB** | [`MeshCore-NM-EPD-420-BW-companion_radio_usb-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-companion_radio_usb-v1.18.0-mod-rev0.3.bin) | ~1.46 MB | USB CDC Serial | Desktop / Web client companion (`app.meshcore.nz` / Python / NodeJS), `RF HEALTH` E-Paper page, optional microSD Libpcap RX logger, Core 0 Async E-Paper, 256-msg PSRAM queue, AHT20 + LiPo ADC |
+| **Repeater** | [`MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.3.bin) | ~1.61 MB | LoRa, USB CDC CLI | Autonomous mesh relay (`MAX_NEIGHBOURS=50`), status + `RF HEALTH` E-Paper page, optional microSD Libpcap logger + `sd *` CLI, thread-safe RadioLib ISR state, 160 MHz + WFI idle sleep, USB CDC ZLP guard, TCXO SX1262 (+22 dBm) |
+| **Room Server** | [`MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.3.bin) | ~1.60 MB | LoRa, USB CDC CLI | Micro-BBS channel/noticeboard server, status + `RF HEALTH` E-Paper page, optional microSD Libpcap logger + `sd *` CLI, thread-safe RadioLib ISR state, 160 MHz + WFI idle sleep, USB CDC ZLP guard, TCXO SX1262 (+22 dBm) |
+| **KISS Modem** | [`MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.3.bin) | ~1.35 MB | USB KISS TNC | Headless serial KISS TNC bridge for AX.25, APRS, TCP/IP, or host software, build-macro radio defaults, optional microSD Libpcap RX/TX logging, 160 MHz MCU, shared HSPI microSD isolation |
 
-MeshCore now supports a range of LoRa devices, allowing for easy flashing without the need to compile firmware manually. Users can flash a pre-built binary using tools like Adafruit ESPTool and interact with the network through a serial console.
-MeshCore provides the ability to create wireless mesh networks, similar to Meshtastic and Reticulum but with a focus on lightweight multi-hop packet routing for embedded projects. Unlike Meshtastic, which is tailored for casual LoRa communication, or Reticulum, which offers advanced networking, MeshCore balances simplicity with scalability, making it ideal for custom embedded solutions, where devices (nodes) can communicate over long distances by relaying messages through intermediate nodes. This is especially useful in off-grid, emergency, or tactical situations where traditional communication infrastructure is unavailable.
+> **Pre-built binaries, flash scripts & checksums:** [`release/`](release/) · [`SHA256SUMS.txt`](release/SHA256SUMS.txt)  
+> **Hardware Deep Dive:** [`README_NM_EPD_420.md`](README_NM_EPD_420.md) · **Full Changelog:** [`RELEASE_NOTES.md`](RELEASE_NOTES.md)
 
-## ⚡ Key Features
+---
 
-* Multi-Hop Packet Routing
-  * Devices can forward messages across multiple nodes, extending range beyond a single radio's reach.
-  * Supports up to a configurable number of hops to balance network efficiency and prevent excessive traffic.
-  * Nodes use fixed roles where "Companion" nodes are not repeating messages at all to prevent adverse routing paths from being used.
-* Supports LoRa Radios – Works with Heltec, RAK Wireless, and other LoRa-based hardware.
-* Decentralized & Resilient – No central server or internet required; the network is self-healing.
-* Low Power Consumption – Ideal for battery-powered or solar-powered devices.
-* Simple to Deploy – Pre-built example applications make it easy to get started.
+## Hardware Highlights (`RockBase NM-EPD-420-BW`)
 
-## 🎯 What Can You Use MeshCore For?
+- **SoC & Memory:** ESP32-S3R8 (`160 MHz`, `qio_opi`), `16 MB` Flash (`DIO`), `8 MB` Octal PSRAM (hosts the 256-frame Companion offline queue).
+- **Display Engine:** 4.2" `400x300` GYE042A87 (`SSD1683`) E-Paper on dedicated `16 MHz` FSPI (`IO1`/`IO2`/`IO46`/`IO4`/`IO5`/`IO6`), driven asynchronously by a Core 0 FreeRTOS task with `<1 ms` main-loop commit latency, hardware CRC32 frame caching, automatic full refresh every 30 partials, and post-refresh `powerOff()`.
+- **Radio & Shared HSPI Bus:** Semtech `SX1262` (`1.8V` TCXO via DIO3, DIO2 RF switch, boosted RX gain, `+22 dBm` TX limit, `LORA_EN` power gate on `IO47`, register patch enabled) with portMUX-guarded ISR state and `SD_CS` (`IO7`) isolation + RTC hold.
+- **Sensors & Power Gating:** Native I2C `AHT20` temperature/humidity (`TEMP_CTL` `IO40`), non-blocking 8-sample LiPo ADC (`ADC_EN` `IO43` + 12-point OCV curve + runtime multiplier calibration), `USB_SERIAL_JTAG` SOF host detection (`isUsbPowered()`), WFI idle slicing, and `EXT0` (`BOOT IO0`) / `EXT1` (`DIO1 IO14`) deep sleep wakeup.
+- **Observability:** Cross-role `RF HEALTH` E-Paper telemetry page (`crc_err`, `spi_err`, quantized noise floor, RSSI/SNR, TX/RX airtime, remaining duty-cycle budget, mV/ADC multiplier, `USB|BAT`, microSD ring stats) plus zero-blocking FAT32 microSD Libpcap (`/mesh_capture.pcap`, `DLT_USER0=147`) and text (`/mesh_rf.log`) capture.
 
-* Off-Grid Communication: Stay connected even in remote areas.
-* Emergency Response & Disaster Recovery: Set up instant networks where infrastructure is down.
-* Outdoor Activities: Hiking, camping, and adventure racing communication.
-* Tactical & Security Applications: Military, law enforcement, and private security use cases.
-* IoT & Sensor Networks: Collect data from remote sensors and relay it back to a central location.
+---
 
-## 🚀 How to Get Started
+## Quick Start: Flashing Pre-Built Firmware
 
-* Watch the [MeshCore QuickStart Playlist](https://www.youtube.com/watch?v=iaFltojJrAc&list=PLshzThxhw4O4WU_iZo3NmNZOv6KMrUuF9) by The Comms Channel
-* Watch the [MeshCore Technical Presentation](https://www.youtube.com/watch?v=OwmkVkZQTf4) by Liam Cottle.
-* Read through our [Frequently Asked Questions](./docs/faq.md) and [Documentation](https://docs.meshcore.io).
-* Flash the MeshCore firmware on a supported device.
-* Connect with a supported client.
+### Windows 1-Click Interactive Flashers
 
-For developers:
+Download or clone this repository, connect the **RockBase NM-EPD-420-BW** over USB-C, and run either script inside [`release/`](release/):
 
-* Install [PlatformIO](https://docs.platformio.org) in [Visual Studio Code](https://code.visualstudio.com).
-* Clone and open the MeshCore repository in Visual Studio Code.
-* See the example applications you can modify and run:
-  * [Companion Radio](./examples/companion_radio) - For use with an external chat app, over BLE, USB or Wi-Fi.
-  * [KISS Modem](./examples/kiss_modem) - Serial KISS protocol bridge for host applications. ([protocol docs](./docs/kiss_modem_protocol.md))
-  * [Simple Repeater](./examples/simple_repeater) - Extends network coverage by relaying messages.
-  * [Simple Room Server](./examples/simple_room_server) - A simple BBS server for shared Posts.
-  * [Simple Secure Chat](./examples/simple_secure_chat) - Secure terminal based text communication between devices.
-  * [Simple Sensor](./examples/simple_sensor) - Remote sensor node with telemetry and alerting.
+```powershell
+# PowerShell (interactive COM port & role selector)
+cd release
+powershell -ExecutionPolicy Bypass -File .\flash.ps1
 
-The Simple Secure Chat example can be interacted with through the Serial Monitor in Visual Studio Code, or with a Serial USB Terminal on Android.
+# Direct role selection
+powershell -ExecutionPolicy Bypass -File .\flash.ps1 -Port COM15 -Role repeater
+```
 
-### 🔨 Building for RockBase NM-EPD-420-BW
+Or double-click [`release/flash.bat`](release/flash.bat) / invoke from Command Prompt:
 
-To compile any of the 5 roles with all hardware optimizations:
+```cmd
+cd release
+flash.bat COM15 1
+```
+
+Roles for `flash.bat`: `1` Companion BLE (default), `2` Companion USB, `3` Repeater, `4` Room Server, `5` KISS Modem.
+
+### Manual `esptool` Flash (`0x0` Unified Binary)
+
+```bash
+# Verify SHA256 checksums before flashing (Linux/macOS or PowerShell Get-FileHash)
+cd release
+sha256sum -c SHA256SUMS.txt
+
+# Flash any role binary to offset 0x0 (replace COM15 with /dev/ttyACM0 on Linux)
+python -m esptool --port COM15 --baud 921600 --chip esp32s3 --after watchdog-reset write_flash 0x0 MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.3.bin
+```
+
+> [!TIP]
+> **ESP32-S3 USB-Serial/JTAG Reset Note:** If `esptool` leaves the MCU waiting in ROM download mode after flashing, force a hardware watchdog restart without power-cycling:
+> ```bash
+> python -m esptool --port COM15 --before no-reset --after watchdog-reset flash_id
+> ```
+
+---
+
+## Controls, CLI & Regional Radio Configuration
+
+### Physical Buttons (Companion / Repeater / Room Server)
+
+- **`BOOT` (`IO0`):** Single-click cycles carousel pages / unread messages (`KEY_NEXT`). During the first 8s on the Splash screen, long-press enters CLI Rescue mode.
+- **`USER` (`IO45`):** Single-click steps backward (`KEY_PREV`) / dismisses previews. Long-press triggers action/enter (`KEY_ENTER`, e.g., triggers immediate sensor read on `RADIO`, retries FAT32 microSD mount on `RF HEALTH`, sends Advert on `ADVERT`, triggers scan on `DISCOVERY`). Hold `USER` for **5 seconds during boot** (Companion BLE) to wipe BLE pairing bonds and reset config.
+- **Double-Click (`BOOT` or `USER` on Companion UI):** Forces a full E-Paper clear/refresh cycle (`Screen Refresh`) and immediately refreshes sensor telemetry.
+
+### microSD RF Logger CLI (`Repeater` & `Room Server`)
+
+Insert a FAT32-formatted microSD card (captures `/mesh_capture.pcap` with `DLT_USER0=147` and `/mesh_rf.log`) and query or control capture via Serial/Admin CLI:
+
+```text
+sd status     -> mount state, card MB, ring occupancy (0..32), queued/written/dropped/errors
+sd retry      -> retry card mount without rebooting
+sd on         -> enable frame capture
+sd off        -> disable frame capture
+sd clear      -> clear RAM ring buffer and counters
+sd pcap-test  -> validate Libpcap header & record serialization
+sd ring-test  -> push synthetic RX/TX frames through the ring buffer
+```
+
+### EU868 10% Duty-Cycle Band (`869.618 MHz`)
+
+Repeater/Companion radio airtime budget follows `duty_cycle = 1 / (1 + airtime_factor)`. For sub-band g3 (`869.618 MHz`, 10% duty cycle), configure via CLI after flashing:
+
+```text
+set af 9
+```
+
+*(Note on versioning: In-protocol `FIRMWARE_VERSION` in `MyMesh.h` stays `"v1.18.0"` to maintain strict compatibility with the 20-byte BLE info frame and SplashScreen parser across MeshCore mobile/web clients. Board revision `-mod-rev0.3` tracks the hardware/firmware package release.)*
+
+---
+
+## Building From Source (PlatformIO)
+
+### Build All 5 Roles + Verify Anonymization & Checksums
+
+```powershell
+.\build_and_release.ps1 -Version v1.18.0-mod-rev0.3 -Clean
+```
+
+`build_and_release.ps1` compiles all 5 targets, generates unified `0x0` images (`mergebin`), enforces a zero host-path-leak scan across every generated `.bin` (protected via `-fmacro-prefix-map` / `-ffile-prefix-map` in [`variants/nm_epd_420_bw/platformio.ini`](variants/nm_epd_420_bw/platformio.ini)), and writes `release/SHA256SUMS.txt`.
+
+### Build a Single Role
 
 ```bash
 # Companion Radio BLE (Default)
-pio run -e NM_EPD_420_BW_companion_radio_ble
+pio run -e NM_EPD_420_BW_companion_radio_ble -t mergebin
 
 # Companion Radio USB
-pio run -e NM_EPD_420_BW_companion_radio_usb
+pio run -e NM_EPD_420_BW_companion_radio_usb -t mergebin
 
 # Repeater
-pio run -e NM_EPD_420_BW_repeater
+pio run -e NM_EPD_420_BW_repeater -t mergebin
 
 # Room Server
-pio run -e NM_EPD_420_BW_room_server
+pio run -e NM_EPD_420_BW_room_server -t mergebin
 
 # KISS Modem
-pio run -e NM_EPD_420_BW_kiss_modem
+pio run -e NM_EPD_420_BW_kiss_modem -t mergebin
 ```
 
-## ⚡️ MeshCore Flasher
+Output unified images are placed at `.pio/build/<env>/firmware-merged.bin`.
 
-We have prebuilt firmware ready to flash on supported devices.
-
-* Launch <https://meshcore.io/flasher>
-* Select a supported device
-* Flash one of the firmware types:
-  * Companion, Repeater or Room Server
-* Once flashing is complete, you can connect with one of the MeshCore clients below.
-
-## 📱 MeshCore Clients
-
-**Companion Firmware**
-
-The companion firmware can be connected to via BLE, USB or Wi-Fi depending on the firmware type you flashed.
-
-* Web: <https://app.meshcore.nz>
-* Android: <https://play.google.com/store/apps/details?id=com.liamcottle.meshcore.android>
-* iOS: <https://apps.apple.com/us/app/meshcore/id6742354151?platform=iphone>
-* NodeJS: <https://github.com/liamcottle/meshcore.js>
-* Python: <https://github.com/fdlamotte/meshcore-cli>
-
-**Repeater and Room Server Firmware**
-
-The repeater and room server firmware can be set up via USB in the web config tool.
-
-* <https://config.meshcore.io>
-
-They can also be managed via LoRa in the mobile app by using the Remote Management feature.
-
-## 🛠 Hardware Compatibility
-
-MeshCore is designed for devices listed in the [MeshCore Flasher](https://meshcore.io/flasher)
-
-## 📜 License
-
-MeshCore is open-source software released under the MIT License. You are free to use, modify, and distribute it for personal and commercial projects.
-
-## Contributing
-
-Please submit PR's using 'dev' as the base branch!
-For minor changes just submit your PR and we'll try to review it, but for anything more 'impactful' please open an Issue first and start a discussion. It is better to sound out what it is you want to achieve first, and try to come to a consensus on what the best approach is, especially when it impacts the structure or architecture of this codebase.
-
-Here are some general principles you should try to adhere to:
-
-* Keep it simple. Please, don't think like a high-level lang programmer. Think embedded, and keep code concise, without any unnecessary layers.
-* No dynamic memory allocation, except during setup/begin functions.
-* Use the same brace and indenting style that's in the core source modules. (A .clang-format is probably going to be added soon, but please do NOT retroactively re-format existing code. This just creates unnecessary diffs that make finding problems harder)
-
-Help us prioritize! Please react with thumbs-up to issues/PRs you care about most. We look at reaction counts when planning work.
-
-### Running unit tests
-
-To run unit tests, run the following command:
+### Unit Tests
 
 ```bash
-pio test --environment native --verbose
+pio test -e native -e native_kiss_modem -vv
 ```
 
-## Road-Map / To-Do
+---
 
-There are a number of fairly major features in the pipeline, with no particular time-frames attached yet. In very rough chronological order:
-* [X] Companion radio: UI redesign
-* [X] Repeater + Room Server: add ACL's (like Sensor Node has)
-* [X] Standardise Bridge mode for repeaters
-* [ ] Repeater/Bridge: Standardise the Transport Codes for zoning/filtering
-* [X] Core + Repeater: enhanced zero-hop neighbour discovery
-* [ ] Core: round-trip manual path support
-* [ ] Companion + Apps: support for multiple sub-meshes (and 'off-grid' client repeat mode)
-* [ ] Core + Apps: support for LZW message compression
-* [ ] Core: dynamic CR (Coding Rate) for weak vs strong hops
-* [ ] Core: new framework for hosting multiple virtual nodes on one physical device
-* [ ] V2 protocol spec: discussion and consensus around V2 packet protocol, including path hashes, new encryption specs, etc
+## Documentation Index
 
-## 📞 Get Support
+| Document | Purpose |
+| --- | --- |
+| [`README_NM_EPD_420.md`](README_NM_EPD_420.md) | Complete board architecture, GPIO pinout map, E-Paper/PSRAM/power design notes, RF Health & microSD guide |
+| [`RELEASE_NOTES.md`](RELEASE_NOTES.md) | Full chronological changelog across all `v1.17.1-mod-*` and `v1.18.0-mod-*` releases |
+| [`release/README.md`](release/README.md) | Distribution package guide, checksum verification, Windows flasher scripts, manual `esptool` steps |
+| [`RELEASE.md`](RELEASE.md) | Maintainer release checklist (local build, leak scan, checksums, release notes, tag & CI publish) |
+| [`docs/`](docs/) | Upstream MeshCore protocol specifications ([CLI Commands](docs/cli_commands.md), [Companion Protocol](docs/companion_protocol.md), [KISS Protocol](docs/kiss_modem_protocol.md), [Packet Format](docs/packet_format.md), [FAQ](docs/faq.md)) |
 
-* Report bugs and request features on the [GitHub Issues](https://github.com/ripplebiz/MeshCore/issues) page.
-* Find additional guides and components on [my site](https://buymeacoffee.com/ripplebiz).
-* Join [MeshCore Discord](https://meshcore.gg) to chat with the developers and get help from the community.
+---
+
+## Development Roadmap (`RockBase NM-EPD-420 MOD`)
+
+Planned improvements for upcoming releases (`rev0.4+` and future upstream syncs):
+
+* **Hardware Audio Notification Synthesizer (`ES8311` + `NS4150B`):** Activate hardware-gated I2S chime/tone feedback via `CODEC_EN` (`IO44`) and `PA_CTRL` (`IO41`) for incoming messages and alerts while retaining zero quiescent drain in standby.
+* **Filesystem Migration (`SPIFFS` -> `LittleFS`):** Migrate ESP32 internal flash storage from `SPIFFS` to `LittleFS` for better wear leveling, faster contact/channel serialization, and power-loss resilience.
+* **Physical Peripherals & Soak Verification:** End-to-end physical soak testing of sustained FAT32 microSD Libpcap logging/rotation under heavy LoRa traffic, plus extended BLE + WiFi coexistence stability benchmarks on `Companion Radio BLE`.
+* **Browser Web Flasher (ESP Web Tools):** Host a versioned `manifest.json` + GitHub Pages site so all 5 roles can be flashed with one click directly from Chrome/Edge.
+* **Upstream MeshCore Tracking:** Periodic merges from [`meshcore-dev/MeshCore`](https://github.com/meshcore-dev/MeshCore) bringing protocol v2 / transport zoning improvements while preserving all `-MOD` board optimizations.
+
+---
+
+## Compatible MeshCore Clients
+
+* **Companion Apps:** [Web Client](https://app.meshcore.nz) · [Android (Google Play)](https://play.google.com/store/apps/details?id=com.liamcottle.meshcore.android) · [iOS (App Store)](https://apps.apple.com/us/app/meshcore/id6742354151?platform=iphone) · [meshcore.js](https://github.com/liamcottle/meshcore.js) · [meshcore-cli (Python)](https://github.com/fdlamotte/meshcore-cli)
+* **Repeater / Room Server Configuration:** [MeshCore Web Config](https://config.meshcore.io) (USB Serial) or LoRa Remote Management from the mobile app.
+
+---
+
+## About Upstream MeshCore, Support & License
+
+This repository is a hardware-specific fork of [**MeshCore**](https://github.com/meshcore-dev/MeshCore) — a lightweight, portable C++ multi-hop LoRa packet routing system with role-based nodes (Companion, Repeater, Room Server, KISS Modem, Sensor).
+
+* **NM-EPD-420-BW Hardware / MOD Issues & Releases:** Open an issue in [**v3n0m3n0/MeshCore-NM-EPD-420-MOD/issues**](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/issues).
+* **Board Schematics & Vendor Reference:** [`RockBase-iot/NM-EPD-420`](https://github.com/RockBase-iot/NM-EPD-420) · [`RockBase-iot/meshcore`](https://github.com/RockBase-iot/meshcore/tree/nm-epd-420).
+* **Upstream MeshCore Protocol & Apps:** [`meshcore-dev/MeshCore`](https://github.com/meshcore-dev/MeshCore) · [MeshCore Discord](https://meshcore.gg) · [MeshCore Docs](https://docs.meshcore.io).
+* **Contributing:** See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`SECURITY.md`](SECURITY.md). Please target `main` or `nm-epd-420-bw-mod` when opening PRs specific to this fork.
+* **License:** Released under the **MIT License** ([`license.txt`](license.txt)), consistent with upstream MeshCore.
