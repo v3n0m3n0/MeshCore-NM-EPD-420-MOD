@@ -1,4 +1,4 @@
-# RockBase NM-EPD-420-BW v1.18.0-mod Firmware Suite
+# RockBase NM-EPD-420-BW v1.18.0-mod-rev0.3 Firmware Suite
 
 This repository is an optimized, hardware-verified modification of [MeshCore](https://github.com/meshcore-dev/MeshCore) providing full, production-ready support for the **RockBase NM-EPD-420** ESP32-S3 board with a **4.2-inch Black & White E-Paper display (GYE042A87 / SSD1683)** and **Semtech SX1262 LoRa transceiver**, compiled across all 5 official roles: **Companion Radio BLE**, **Companion Radio USB**, **Repeater**, **Room Server**, and **KISS Modem**.
 
@@ -54,17 +54,23 @@ This repository is an optimized, hardware-verified modification of [MeshCore](ht
 * When the paired phone is connected via BLE, incoming messages are immediately streamed to the mobile client via `PUSH_CODE_MSG_WAITING` and `CMD_SYNC_NEXT_MESSAGE`, draining the radio's offline queue to 0 in ~20 ms.
 * When the phone is disconnected, the device queues incoming messages in local memory and increments `MSG: %d` until reconnected.
 
-### 7. Performance, Concurrency & UX Optimizations (rev0.2 / rev0.3)
+### 7. Performance, Concurrency & Power Management
 * **Asynchronous Core 0 E-Paper Refresh Engine & 16 MHz FSPI:** Offloaded blocking `GxEPD2` screen updates (~600 ms partial / ~2.2s full) to a dedicated FreeRTOS task pinned to Core 0 and increased the FSPI clock from 4 MHz to 16 MHz. The main application loop (`the_mesh`, BLE, and button polling) runs with zero display-induced blocking (<1 ms frame commit).
-* **Two-Stage Non-Blocking Battery ADC & AHT20 Warmup State Machines:** Replaced synchronous `delay(20)` ADC divider settling and `delay(50)` AHT20 power-gate warmup delays with `millis()`-driven state machines and 15s/20s TTL caches.
-* **Shared HSPI Bus MicroSD Guard (`PIN_SDCARD_CS` IO7):** Explicitly drives and RTC-latches `SD_CS` (GPIO 7) HIGH across active and deep-sleep states so an inserted MicroSD card never contends with the SX1262 LoRa transceiver on the shared HSPI bus.
+* **Two-Stage Non-Blocking Battery ADC & AHT20 State Machines:** Replaced synchronous warmup/settle delays with `millis()`-driven state machines: a 45 s background AHT20 I2C cycle keeping `TEMP_CTL` (IO40) stably powered during runtime, and a `BattAdcState` pipeline supporting runtime `setAdcMultiplier()` calibration.
+* **Shared HSPI Bus MicroSD Guard (`PIN_SDCARD_CS` IO7) & Deep Sleep Pin Isolation:** Explicitly drives and RTC-latches `SD_CS` (GPIO 7) HIGH, isolates SX1262 SPI lines before cutting `SX126X_POWER_EN` (IO47) in Deep Sleep to prevent ESD back-powering, and uses interruptible WFI idle slices (`sleep()`) paired with USB-Serial/JTAG SOF host detection (`isUsbPowered()`, 5 s holdoff) to keep RX active and avoid OPI PSRAM Light Sleep lockups.
 * **$O(1)$ Circular Ring Buffers & PSRAM Queue Allocation:** Converted `offline_queue` (256 frames, allocated in 8 MB Octal PSRAM to free ~44.5 KB of internal SRAM) and `SerialBLEInterface::send_queue` (expanded 4x from 4 to 16 frames) from $O(N)$ shifting arrays to $O(1)$ ring buffers.
 * **$O(\log K)$ Binary-Search Text Ellipsizing & Extended UTF-8 Symbols:** Replaced character-by-character width probing in `drawTextEllipsized()` with binary search and added `0xC2` symbol transliteration (`°`, `±`, `²`, `³`, `µ`, `·`, NBSP).
 * **Bidirectional Unread Message Navigation & `X/Y` Pagination:** Added `Unread: X/Y` position counter on `MsgPreviewScreen`, mapped single-click `USER` (`KEY_PREV`) to step backward to newer messages (instead of wiping the queue), and added on-screen visual feedback during the 5-second `USER` button hardware factory reset.
-* **80 MHz Low-Power MCU Tuning & Deep Sleep RTC GPIO Hold:** Lowered default CPU clock from 240 MHz to 80 MHz (~60% active MCU current reduction), added FreeRTOS idle yield, and latched peripheral power gates (`IO40`, `IO43`, `IO41`, `IO44`) LOW in deep sleep.
-* **Hardware Anti-Ghosting on Demand & RF Noise Floor Quantization:** Double-clicking `USER` (IO45) forces a full E-Paper refresh; quantized SX1262 noise floor to 3 dBm steps on the RADIO page.
+* **160 MHz MCU Clock & Windows USB CDC CLI Reliability:** Tuned ESP32-S3 CPU frequency to 160 MHz for deterministic LoRa/BLE/display headroom, silenced verbose GxEPD2 init serial chatter, added flash-write CDC re-latch wait, and avoided exact 64-byte USB CDC ZLP boundary stalls on Repeater and Room Server CLI responses.
+* **Hardware Anti-Ghosting on Demand & RF Noise Floor Quantization:** Double-clicking `USER` (IO45) forces a full E-Paper refresh; quantized SX1262 noise floor to 3 dBm steps on the RADIO and RF HEALTH pages.
 
-### 8. Future Optimization Backlog
+### 8. RF Health Telemetry, RadioLib Reliability & microSD Libpcap Logger (v1.18.0-mod-rev0.3)
+* **Thread-Safe RadioLib State & Separate CRC / SPI Diagnostics:** Added ESP32 `portMUX_TYPE` critical-section protection (`IRAM` ISR + main loop) around RadioLib interrupt/state transitions, safe `setParams()` reconfiguration (standby -> apply params -> restore `setRxBoostedGainMode()` -> resume RX), and separated `crc_err` from `spi_err` in radio JSON telemetry.
+* **Cross-Role `RF HEALTH` E-Paper View (`NMEPD420RfHealthUI`):** Added an on-device diagnostic screen (`RF HEALTH`) across Companion Radio (`HomeScreen` carousel), Repeater, and Room Server displaying noise floor, last RSSI/SNR, `RX / CRC / SPI` packet counters, TX/RX airtime, remaining duty budget (`af`), live `mV` / ADC multiplier / `USB|BAT` source, and microSD logger status.
+* **Shared-HSPI microSD RF Packet Logger (`NMEPD420SDLogger`):** Optional zero-blocking 32-entry RAM ring buffer that arbitrates HSPI (`P_LORA_NSS` IO8 vs `PIN_SDCARD_CS` IO7) when a FAT32 microSD card is present to append `/mesh_capture.pcap` (Wireshark `DLT_USER0 = 147`) and `/mesh_rf.log`, controllable via `sd status|retry|on|off|clear|pcap-test|ring-test` CLI commands or `Enter` on Companion `RF HEALTH`.
+* **EU868 10% Duty Budget Note & KISS Modem Sync:** Seeded initial KISS modem radio config from build macros (`LORA_FREQ`, `LORA_BW`, `LORA_SF`, `LORA_CR`, `LORA_TX_POWER`), enabled `SX126X_REGISTER_PATCH=1`, and documented `set af 9` for EU868 g3 10% duty-cycle operation.
+
+### 9. Future Optimization Backlog
 * **I2S Audio Notification Synthesizer (ES8311 + NS4150B):** Implement a lightweight zero-idle-drain I2S tone generator driving the onboard ES8311 codec (`0x18`, `CODEC_EN` IO44) and NS4150B amplifier (`PA_CTRL` IO41) for audible message alerts (`UITask::notify()`).
 * **Filesystem Migration (`SPIFFS` -> `LittleFS`):** Migrate `DataStore` storage on ESP32 from deprecated `SPIFFS` to `LittleFS` for faster contact/blob I/O, superior wear-leveling, and power-loss resilience (with an automated one-time migration path for existing `/contacts` and identity files).
 

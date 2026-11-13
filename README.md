@@ -1,20 +1,20 @@
-# RockBase NM-EPD-420 MOD — MeshCore Firmware Suite (v1.18.0-mod-rev0.2)
+# RockBase NM-EPD-420 MOD — MeshCore Firmware Suite (v1.18.0-mod-rev0.3)
 
 > [!NOTE]
-> **Complete Hardware & Firmware MOD Suite (`v1.18.0-mod-rev0.2`)**  
+> **Complete Hardware & Firmware MOD Suite (`v1.18.0-mod-rev0.3`)**  
 > This repository provides an optimized, hardware-verified firmware suite of **MeshCore v1.18.0** for the **RockBase NM-EPD-420-BW** board (ESP32-S3R8 + 4.2" 400×300 B/W E-Paper + SX1262 LoRa + AHT20), with **all 5 official roles** pre-compiled and packaged into unified single-file `0x0` flashable binaries.
 
 ### 📦 Available Firmware Roles (-MOD Suite)
 
-All 5 roles share the custom hardware layer (`NMEPD420Board`, `NMEPD420Display`, `NMEPD420EnvironmentSensorManager`, `CommonRadioPrefs`):
+All 5 roles share the custom hardware layer (`NMEPD420Board`, `NMEPD420Display`, `NMEPD420EnvironmentSensorManager`, `NMEPD420SDLogger`, `CommonRadioPrefs`):
 
 | Role | Unified Binary (`0x0`) | Size | Key Capabilities & Hardware Features |
 | --- | --- | :---: | --- |
-| **Companion Radio BLE** | [`MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.2.bin`](release/MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.2.bin)<br>*(alias: `MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.2.bin`)* | ~1.96 MB | Mobile App connectivity via BLE, dynamic WiFi station, interactive Companion CLI (`CMD_RUN_CLI_COMMAND`), zero-hop Node Discover UI (`HomePage::DISCOVERY`), 400×300 Core 0 Async E-Paper, 256 offline queue in PSRAM, AHT20 & battery telemetry, 5s factory reset. |
-| **Companion Radio USB** | [`MeshCore-NM-EPD-420-BW-companion_radio_usb-v1.18.0-mod-rev0.2.bin`](release/MeshCore-NM-EPD-420-BW-companion_radio_usb-v1.18.0-mod-rev0.2.bin) | ~1.41 MB | Desktop / Laptop companion via USB CDC serial terminal or web app, 400×300 Core 0 Async E-Paper, 256 offline queue in PSRAM, AHT20 & battery telemetry. |
-| **Repeater** | [`MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.2.bin`](release/MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.2.bin) | ~1.56 MB | Autonomous field / solar packet repeater, zero-hop neighbour discovery, live repeater statistics on 4.2" E-Paper, low-power 80 MHz MCU, shared HSPI MicroSD CS isolation, TCXO SX1262 (+22 dBm). |
-| **Room Server** | [`MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.2.bin`](release/MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.2.bin) | ~1.56 MB | Micro-BBS room server for shared channels and bulletin posts, live statistics on 4.2" E-Paper, zero-hop discovery, low-power 80 MHz MCU, shared HSPI MicroSD CS isolation, TCXO SX1262 (+22 dBm). |
-| **KISS Modem** | [`MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.2.bin`](release/MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.2.bin) | ~1.30 MB | Serial KISS TNC bridge for AX.25, APRS, TCP/IP, or Python hosts, headless operation (display disabled), audio PA disabled, low-power 80 MHz MCU, shared HSPI MicroSD CS isolation. |
+| **Companion Radio BLE** | [`MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-companion_radio_ble-v1.18.0-mod-rev0.3.bin)<br>*(alias: `MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.3.bin`)* | ~2.01 MB | Mobile App connectivity via BLE, dynamic WiFi station, interactive Companion CLI (`CMD_RUN_CLI_COMMAND`), `RF HEALTH` E-Paper telemetry page, optional FAT32 microSD Libpcap (`DLT_USER0=147`) RF logger, zero-hop Node Discover UI (`HomePage::DISCOVERY`), 400×300 Core 0 Async E-Paper, 256 offline queue in PSRAM, AHT20 & battery telemetry, 5s factory reset. |
+| **Companion Radio USB** | [`MeshCore-NM-EPD-420-BW-companion_radio_usb-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-companion_radio_usb-v1.18.0-mod-rev0.3.bin) | ~1.46 MB | Desktop / Laptop companion via USB CDC serial terminal or web app, `RF HEALTH` E-Paper telemetry page, microSD Libpcap logger, 400×300 Core 0 Async E-Paper, 256 offline queue in PSRAM, AHT20 & battery telemetry. |
+| **Repeater** | [`MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.3.bin) | ~1.61 MB | Autonomous field / solar packet repeater, live status + `RF HEALTH` E-Paper page, optional microSD Libpcap logger + `sd *` CLI, thread-safe RadioLib ISR state, 160 MHz MCU + WFI idle sleep, USB CDC ZLP guard, shared HSPI MicroSD CS isolation, TCXO SX1262 (+22 dBm). |
+| **Room Server** | [`MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.3.bin) | ~1.60 MB | Micro-BBS room server for shared channels and bulletin posts, live status + `RF HEALTH` E-Paper page, optional microSD Libpcap logger + `sd *` CLI, 160 MHz MCU + WFI idle sleep, USB CDC ZLP guard, shared HSPI MicroSD CS isolation, TCXO SX1262 (+22 dBm). |
+| **KISS Modem** | [`MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.3.bin`](release/MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.3.bin) | ~1.35 MB | Serial KISS TNC bridge for AX.25, APRS, TCP/IP, or Python hosts, synced build-macro radio defaults, optional microSD Libpcap RX/TX logging, headless operation (display & audio PA disabled), 160 MHz MCU, shared HSPI MicroSD CS isolation. |
 
 > 🚀 **1-Click Flasher & Binaries:** Available in [`release/`](release/) (`flash.ps1` / `flash.bat` with interactive role selection)  
 > 📄 **Technical Specs & Full Changelog:** [RELEASE_NOTES.md](RELEASE_NOTES.md) | [README_NM_EPD_420.md](README_NM_EPD_420.md) | [release/README.md](release/README.md)

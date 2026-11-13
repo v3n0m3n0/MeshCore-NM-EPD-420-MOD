@@ -2,11 +2,11 @@ name: Build RockBase NM-EPD-420-BW
 
 on:
   push:
-    branches: [nm-epd-420-bw]
+    branches: [nm-epd-420-bw-mod]
     tags:
       - 'v*'
   pull_request:
-    branches: [nm-epd-420-bw]
+    branches: [nm-epd-420-bw-mod]
   workflow_dispatch:
 
 permissions:

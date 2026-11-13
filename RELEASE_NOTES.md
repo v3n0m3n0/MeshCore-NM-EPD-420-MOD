@@ -1,3 +1,40 @@
+# MeshCore-NM-EPD-420-BW v1.18.0-mod-rev0.3 Release Notes
+
+**Target Hardware:** RockBase NM-EPD-420-BW (ESP32-S3R8, 16MB Flash, 8MB Octal PSRAM, 4.2" 400×300 B/W E-Paper SSD1683, Semtech SX1262 LoRa, AHT20 sensor).  
+**Branch:** `nm-epd-420-bw-mod`  
+**Base:** MeshCore Companion Firmware v1.18.0 (`81dbae5`, protocol version 14)  
+**Maintainer:** [@v3n0m3n0](https://github.com/v3n0m3n0)
+
+---
+
+## Executive Summary (v1.18.0-mod-rev0.3)
+
+Release **v1.18.0-mod-rev0.3** hardens ESP32-S3 hardware stability, RadioLib concurrency, USB-Serial/JTAG host communication, and on-device RF observability across all 5 official firmware roles (`companion_radio_ble`, `companion_radio_usb`, `repeater`, `room_server`, `kiss_modem`), while packaging anonymized unified `0x0` release binaries.
+
+### 1. Hardware Power Rails, Non-Blocking Sensors, Sleep & Clocking (`NMEPD420Board`, `NMEPD420EnvironmentSensorManager`, `NMEPD420Display`)
+
+* **160 MHz CPU Frequency & Silent EPD Init:** Raised default CPU frequency from 80 MHz to 160 MHz in `boards/nm-epd-420-bw.json` and `variants/nm_epd_420_bw/platformio.ini` for deterministic BLE/LoRa/display concurrency headroom, and silenced `GxEPD2` serial init debug chatter (`display.init(0, true, 2, false)`).
+* **Safe SX1262 Power-Up & Deep-Sleep ESD Back-Power Isolation:** Powers up `SX126X_POWER_EN` (IO47) and stabilizes VDD/TCXO before configuring `P_LORA_NSS`/`PIN_SDCARD_CS` HIGH at boot; isolates SX1262 SPI signal pins (`SCLK`, `MOSI`, `RESET` -> `INPUT`, `NSS` latched `LOW`) prior to cutting `SX126X_POWER_EN` in `enterDeepSleep()` so the unpowered radio does not back-power through SPI ESD diodes. Also sets defined idle states for display pins in headless builds.
+* **Interruptible WFI Idle Sleep & USB SOF Host Detection:** Replaced OPI PSRAM Light Sleep calls (`esp_light_sleep_start()`, which lock up on prebuilt `qio_opi` cores) with interruptible 20 ms WFI slices (`sleep()`) that keep SX1262 RX active, feed the Task Watchdog Timer (`esp_task_wdt_reset()`), and break promptly on `DIO1` RX, `BOOT` button press, EPD busy state, or USB host attach. Implemented `isUsbPowered()` / `isUsbHostActive()` tracking `USB_SERIAL_JTAG.fram_num.sof_frame_index` with a 5 s holdoff window.
+* **Non-Blocking Battery ADC (`BattAdcState`) & Calibration API:** Converted periodic battery sampling in `NMEPD420Board::loop()` to a non-blocking state machine (`ADC_IDLE` -> `ADC_SETTLING` -> `ADC_SAMPLING`) with cached boot seeding and implemented `setAdcMultiplier()` / `getAdcMultiplier()`.
+* **Non-Blocking AHT20 State Machine:** Converted `NMEPD420EnvironmentSensorManager` background refreshes to a non-blocking 45 s I2C state machine (`WAIT_WARMUP`, `WAIT_INIT`, `WAIT_MEASURE`, `POLL_READY`) keeping `TEMP_CTL` (IO40) stably powered during runtime.
+
+### 2. Thread-Safe RadioLib Driver, SX1262 Configuration & Telemetry Split
+
+* **Critical-Section ISR Protection (`RadioLibWrappers`):** Protected all `state` reads and writes shared with the `DIO1` `setFlag()` ISR using ESP32 `portMUX_TYPE` (`portENTER_CRITICAL` / `portENTER_CRITICAL_ISR`), eliminating lost interrupt flags and spurious idle/RX races across cores.
+* **Safe `setParams()` Reconfiguration & `SX126X_REGISTER_PATCH=1`:** `CustomSX1262Wrapper::setParams()` now cleanly leaves RX (`idle()` -> `standby()`), applies radio parameters, restores `setRxBoostedGainMode()`, recomputes packet timing windows, and conditionally returns to `startRecv()`. Enabled `SX126X_REGISTER_PATCH=1` and documented `set af 9` in `platformio.ini` for EU868 869.618 MHz 10% duty-cycle operation.
+* **Separated CRC vs SPI Error Counters (`StatsFormatHelper`):** Split `RadioLibWrapper` receive/control error accounting into `n_crc_errors` (`crc_err`: `RADIOLIB_ERR_CRC_MISMATCH` / `RADIOLIB_ERR_LORA_HEADER_DAMAGED`) and `n_spi_errors` (`spi_err`), exposed safely via SFINAE in `StatsFormatHelper::formatRadioStats()`.
+
+### 3. Cross-Role `RF HEALTH` UI, microSD Libpcap Logger & Serial/KISS Fixes
+
+* **Shared `RF HEALTH` E-Paper View (`NMEPD420RfHealthUI`):** Added an `RF HEALTH` diagnostic screen across Companion Radio (`HomeScreen` carousel, with `Enter` triggering `sd_logger.retryMount()` + full EPD refresh), Repeater, and Room Server (`USER` button toggles Main / RF Health; calmer 5 s SSD1683 partial refresh cadence, disabled premature `AUTO_OFF_MILLIS` timeout). Displays frequency/SF, quantized noise floor, last RSSI/SNR, `RX / CRC / SPI` packet counts, TX/RX airtime, remaining duty budget (`af`), live voltage / ADC multiplier / `USB|BAT` source, and microSD logger summary.
+* **Shared-HSPI microSD RF Logger (`NMEPD420SDLogger`):** Added an optional FAT32 microSD packet logger backed by a 32-entry non-blocking RAM ring buffer that yields to `SX1262` (`!radio_driver.isInRecvMode()` / `P_LORA_NSS` HIGH) before writing `/mesh_capture.pcap` (Wireshark `DLT_USER0 = 147` + 4-byte RF tap header) and `/mesh_rf.log` CSV entries. Wired RX/TX logging and `sd status|retry|on|off|clear|pcap-test|ring-test` CLI commands across Companion Radio, Repeater, Room Server, and KISS Modem.
+* **Windows USB CDC Reliability (Repeater & Room Server):** Added short post-flash-write USB CDC re-latch wait (`15 ms` max) and trailing `\r\n` padding when formatted CLI replies land on exact 64-byte bulk packet boundaries to avoid Windows `usbser.sys` ZLP stalls.
+* **KISS Modem Radio Config Sync:** Synchronized `KissModem` initial radio configuration at startup from build-time `LORA_FREQ`, `LORA_BW`, `LORA_SF`, `LORA_CR`, and `LORA_TX_POWER` macros.
+* **Anonymized Release Packaging (`v1.18.0-mod-rev0.3`):** Restored compiler `-fmacro-prefix-map` / `-ffile-prefix-map` flags across all 5 environments, replaced `build_and_release_rev02.ps1` with a parameterized host-path-clean `build_and_release.ps1` (including automated binary string leak verification), and updated multi-role flashers (`release/flash.ps1`, `release/flash.bat`).
+
+---
+
 # MeshCore-NM-EPD-420-BW v1.18.0-mod-rev0.2 Release Notes
 
 **Target Hardware:** RockBase NM-EPD-420-BW (ESP32-S3R8, 16MB Flash, 8MB Octal PSRAM, 4.2" 400×300 B/W E-Paper SSD1683, Semtech SX1262 LoRa, AHT20 sensor).  
