@@ -1,4 +1,4 @@
-# Parameterized PowerShell build and release script for MeshCore NM-EPD-420-BW
+# Parameterized PowerShell build and release script for RockBase NM-EPD-420 MOD (RockBase NM-EPD-420-BW)
 param(
     [string]$Version = "v1.18.0-mod-rev0.3",
     [switch]$Clean
@@ -44,7 +44,7 @@ if ($env:PATH -notlike "*$pioScripts*") {
 $env:PYTHONIOENCODING = "utf-8"
 $env:PYTHONUTF8 = "1"
 
-Write-Host "=== Building MeshCore NM-EPD-420-BW $Version ===" -ForegroundColor Cyan
+Write-Host "=== Building RockBase NM-EPD-420 MOD ($Version) for RockBase NM-EPD-420-BW ===" -ForegroundColor Cyan
 Write-Host "Workspace: $workspaceRoot"
 Write-Host "Pio:       $pio"
 Write-Host "Python:    $python"

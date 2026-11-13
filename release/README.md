@@ -17,7 +17,7 @@ This directory contains pre-compiled, host-path-anonymized unified `0x0` binarie
 | **Room Server** | [`MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.3.bin`](MeshCore-NM-EPD-420-BW-room_server-v1.18.0-mod-rev0.3.bin) | ~1.60 MB | Micro-BBS room server for shared channels, noticeboards & posts | Async E-Paper status + `RF HEALTH`, microSD Libpcap logger (`sd *` CLI), 160 MHz + WFI idle sleep, USB CDC ZLP guard, TCXO SX1262 (`+22 dBm`) |
 | **KISS Modem** | [`MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.3.bin`](MeshCore-NM-EPD-420-BW-kiss_modem-v1.18.0-mod-rev0.3.bin) | ~1.35 MB | Serial KISS TNC bridge for AX.25, APRS, TCP/IP, or host tools | Headless radio bridge, microSD Libpcap RX/TX logging, synced build-macro radio defaults, 160 MHz MCU, shared HSPI microSD CS isolation |
 
-Full release history and architectural details: [`RELEASE_NOTES.md`](../RELEASE_NOTES.md) · [`README_NM_EPD_420.md`](../README_NM_EPD_420.md).
+Full release history, naming convention, and architectural details: [`RELEASE_NOTES.md`](../RELEASE_NOTES.md) · [`RELEASE.md`](../RELEASE.md#canonical-naming-standard) · [`README_NM_EPD_420.md`](../README_NM_EPD_420.md).
 
 ---
 

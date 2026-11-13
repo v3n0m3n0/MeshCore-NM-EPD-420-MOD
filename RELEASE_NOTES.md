@@ -78,7 +78,7 @@ Release **v1.18.0-mod-rev0.2** delivers critical power-rail stability, LiPo disc
 
 ### Executive Summary
 
-Release **v1.18.0-mod-rev0.1** upgrades the NM-EPD-420-BW fork from MeshCore v1.17.1 to **MeshCore v1.18.0** (protocol v14) and introduces the complete **5-role firmware suite** (`companion_radio_ble`, `companion_radio_usb`, `repeater`, `room_server`, `kiss_modem`) while carrying forward every board-level E-Paper, PSRAM, sensor, and power optimization.
+Release **v1.18.0-mod-rev0.1** upgrades **RockBase NM-EPD-420 MOD** (targeting **RockBase NM-EPD-420-BW**) from MeshCore v1.17.1 to **MeshCore v1.18.0** (protocol v14) and introduces the complete **5-role firmware suite** (`companion_radio_ble`, `companion_radio_usb`, `repeater`, `room_server`, `kiss_modem`) while carrying forward every board-level E-Paper, PSRAM, sensor, and power optimization.
 
 ### Key Changes
 

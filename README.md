@@ -1,6 +1,6 @@
 # RockBase NM-EPD-420 MOD — MeshCore Multi-Role Firmware Suite
 
-[![Build RockBase NM-EPD-420-BW](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/actions/workflows/nm-epd-420-build.yml/badge.svg)](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/actions/workflows/nm-epd-420-build.yml)
+[![Build RockBase NM-EPD-420 MOD](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/actions/workflows/nm-epd-420-build.yml/badge.svg)](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/actions/workflows/nm-epd-420-build.yml)
 [![Run Unit Tests](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/actions/workflows/run-unit-tests.yml/badge.svg)](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/actions/workflows/run-unit-tests.yml)
 [![Latest Release](https://img.shields.io/github/v/release/v3n0m3n0/MeshCore-NM-EPD-420-MOD?include_prereleases&label=release)](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/releases)
 [![Upstream Base](https://img.shields.io/badge/MeshCore%20Base-v1.18.0%20(proto%20v14)-blue)](https://github.com/meshcore-dev/MeshCore)
@@ -189,7 +189,7 @@ Planned improvements for upcoming releases (`rev0.4+` and future upstream syncs)
 
 This repository is a hardware-specific fork of [**MeshCore**](https://github.com/meshcore-dev/MeshCore) — a lightweight, portable C++ multi-hop LoRa packet routing system with role-based nodes (Companion, Repeater, Room Server, KISS Modem, Sensor).
 
-* **NM-EPD-420-BW Hardware / MOD Issues & Releases:** Open an issue in [**v3n0m3n0/MeshCore-NM-EPD-420-MOD/issues**](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/issues).
+* **RockBase NM-EPD-420-BW Hardware / MOD Issues & Releases:** Open an issue in [**v3n0m3n0/MeshCore-NM-EPD-420-MOD/issues**](https://github.com/v3n0m3n0/MeshCore-NM-EPD-420-MOD/issues).
 * **Board Schematics & Vendor Reference:** [`RockBase-iot/NM-EPD-420`](https://github.com/RockBase-iot/NM-EPD-420) · [`RockBase-iot/meshcore`](https://github.com/RockBase-iot/meshcore/tree/nm-epd-420).
 * **Upstream MeshCore Protocol & Apps:** [`meshcore-dev/MeshCore`](https://github.com/meshcore-dev/MeshCore) · [MeshCore Discord](https://meshcore.gg) · [MeshCore Docs](https://docs.meshcore.io).
 * **Contributing:** See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`SECURITY.md`](SECURITY.md). Please target `main` or `nm-epd-420-bw-mod` when opening PRs specific to this fork.

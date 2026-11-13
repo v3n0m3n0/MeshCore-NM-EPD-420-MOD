@@ -4,6 +4,21 @@ This fork uses unified `0x0` multi-role builds and GitHub Releases tagged with `
 
 ---
 
+## Canonical Naming Standard
+
+| Scope | Canonical Format / Identifier | Example |
+| --- | --- | --- |
+| **Project / Suite** | `RockBase NM-EPD-420 MOD` (`MeshCore-NM-EPD-420-MOD`) | `RockBase NM-EPD-420 MOD` |
+| **Target Hardware** | `RockBase NM-EPD-420-BW` *(board ID: `nm-epd-420-bw`, env prefix: `NM_EPD_420_BW_*`)* | `NM_EPD_420_BW_companion_radio_ble` |
+| **Release Tag** | `v<upstream>-mod-rev<X.Y>` | `v1.18.0-mod-rev0.3` |
+| **Role Binary (`0x0`)** | `MeshCore-NM-EPD-420-BW-<role>-<version>.bin` | `MeshCore-NM-EPD-420-BW-repeater-v1.18.0-mod-rev0.3.bin` |
+| **Default BLE Alias** | `MeshCore-NM-EPD-420-BW-<version>.bin` and `firmware.bin` | `MeshCore-NM-EPD-420-BW-v1.18.0-mod-rev0.3.bin` |
+| **Checksums File** | `SHA256SUMS.txt` | `release/SHA256SUMS.txt` |
+
+Supported `<role>` slugs: `companion_radio_ble`, `companion_radio_usb`, `repeater`, `room_server`, `kiss_modem`.
+
+---
+
 ## Pre-Release Checklist
 
 1. **Build & Verify Anonymized Suite:**

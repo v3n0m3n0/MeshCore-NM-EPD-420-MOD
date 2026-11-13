@@ -1,4 +1,4 @@
-name: Build RockBase NM-EPD-420-BW
+name: Build RockBase NM-EPD-420 MOD
 
 on:
   push:
