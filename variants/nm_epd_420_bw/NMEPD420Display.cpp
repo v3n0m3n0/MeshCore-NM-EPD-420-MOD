@@ -4,6 +4,17 @@
 
 #include <math.h>
 
+// Color scheme for 1-bit monochrome E-Paper display
+ColorVal UIColor::window_bkg = GxEPD_WHITE;
+ColorVal UIColor::title_bkg = GxEPD_WHITE;
+ColorVal UIColor::title_txt = GxEPD_BLACK;
+ColorVal UIColor::primary_txt = GxEPD_BLACK;
+ColorVal UIColor::secondary_txt = GxEPD_BLACK;
+ColorVal UIColor::warning_txt = GxEPD_BLACK;
+ColorVal UIColor::popup_bkg = GxEPD_WHITE;
+ColorVal UIColor::popup_txt = GxEPD_BLACK;
+ColorVal UIColor::corp_blue = GxEPD_BLACK;
+
 static SPIClass nm_epd_spi(FSPI);
 
 NMEPD420Display::NMEPD420Display()
@@ -61,7 +72,7 @@ bool NMEPD420Display::begin() {
   // SSD1683 supports up to 20 MHz SPI write clock; 16 MHz achieves 4x faster frame transfer than 4 MHz
   display.epd2.selectSPI(nm_epd_spi, SPISettings(16000000, MSBFIRST, SPI_MODE0));
   nm_epd_spi.begin(PIN_DISPLAY_SCLK, PIN_DISPLAY_MISO, PIN_DISPLAY_MOSI, PIN_DISPLAY_CS);
-  display.init(115200, true, 2, false);
+  display.init(0, true, 2, false);
   display.setRotation(DISPLAY_ROTATION);
   setTextSize(1);
   display.setFullWindow();

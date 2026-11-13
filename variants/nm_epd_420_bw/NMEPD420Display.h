@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SPI.h>
+#include <Adafruit_GFX.h>
 #include <GxEPD2_BW.h>
 #if __has_include(<other/GxEPD2_420_GYE042A87.h>)
 #include <other/GxEPD2_420_GYE042A87.h>

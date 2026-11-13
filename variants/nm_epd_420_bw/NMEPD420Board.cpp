@@ -1,12 +1,16 @@
 #include "NMEPD420Board.h"
 
 #include <esp_task_wdt.h>
+#include <math.h>
 #include <target.h>
 #ifdef ENABLE_WIFI_INTERFACE
 #include <WiFi.h>
 #endif
 #include <driver/gpio.h>
 #include <driver/rtc_io.h>
+#include <driver/usb_serial_jtag.h>
+#include <esp_sleep.h>
+#include <soc/usb_serial_jtag_struct.h>
 
 #ifndef PIN_SDCARD_CS
 #define PIN_SDCARD_CS 7
@@ -42,6 +46,26 @@ void NMEPD420Board::begin() {
 #endif
   }
 
+#ifdef SX126X_POWER_EN
+  // Enable SX1262 rail first (and wait for VDD + 1.8V TCXO stabilization) before raising NSS HIGH
+  pinMode(SX126X_POWER_EN, OUTPUT);
+  digitalWrite(SX126X_POWER_EN, HIGH);
+  gpio_hold_dis((gpio_num_t)SX126X_POWER_EN);
+  delay(10);
+#endif
+
+  // Snapshot initial USB-Serial/JTAG SOF frame index before USB host activity monitoring begins
+  _last_usb_sof_idx = static_cast<uint16_t>(USB_SERIAL_JTAG.fram_num.sof_frame_index);
+  _last_usb_sof_ms = 0;
+  _usb_sof_seen = false;
+
+#ifdef PIN_BOOT_BTN
+  pinMode(PIN_BOOT_BTN, INPUT_PULLUP);
+#endif
+#ifdef PIN_USER_BTN
+  pinMode(PIN_USER_BTN, INPUT_PULLUP);
+#endif
+
   // 1. Establish defined active output drive levels BEFORE releasing pad holds
   // Keeps SPI CS lines pulled HIGH to prevent bus collisions or SPI flash/SD glitching
   pinMode(P_LORA_NSS, OUTPUT);
@@ -50,9 +74,19 @@ void NMEPD420Board::begin() {
   pinMode(PIN_SDCARD_CS, OUTPUT);
   digitalWrite(PIN_SDCARD_CS, HIGH);
 
-#ifdef SX126X_POWER_EN
-  pinMode(SX126X_POWER_EN, OUTPUT);
-  digitalWrite(SX126X_POWER_EN, HIGH);
+#ifndef DISPLAY_CLASS
+#ifdef PIN_DISPLAY_CS
+  pinMode(PIN_DISPLAY_CS, OUTPUT);
+  digitalWrite(PIN_DISPLAY_CS, HIGH);
+#endif
+#ifdef PIN_DISPLAY_RST
+  pinMode(PIN_DISPLAY_RST, OUTPUT);
+  digitalWrite(PIN_DISPLAY_RST, HIGH);
+#endif
+#ifdef PIN_DISPLAY_DC
+  pinMode(PIN_DISPLAY_DC, OUTPUT);
+  digitalWrite(PIN_DISPLAY_DC, LOW);
+#endif
 #endif
 
   // Keep audio amplifier disabled (0 current draw), but power codec and sensor rails HIGH to prevent ESD
@@ -120,6 +154,78 @@ void NMEPD420Board::begin() {
   if (esp_task_wdt_reconfigure(&twdt_config) != ESP_OK) {
     esp_task_wdt_init(&twdt_config);
   }
+
+  // Seed cached battery voltage synchronously once at boot so later getBattMilliVolts() calls never stall
+  const unsigned long now = millis();
+  _cached_batt_mv = readRawBattMilliVolts();
+  _last_batt_read_ms = (now == 0) ? 1UL : now;
+}
+
+bool NMEPD420Board::setAdcMultiplier(float multiplier) {
+  if (isnan(multiplier) || isinf(multiplier) || multiplier < 0.0f || multiplier > 10.0f) {
+    return false;
+  }
+  const float prev = _adc_multiplier;
+  const float next = (multiplier == 0.0f) ? ADC_MULTIPLIER : multiplier;
+  if (prev > 0.0f && _cached_batt_mv > 0) {
+    _cached_batt_mv = static_cast<uint16_t>((static_cast<float>(_cached_batt_mv) * next) / prev);
+  }
+  _adc_multiplier = next;
+  _adc_sample_requested = true;
+  return true;
+}
+
+void NMEPD420Board::loop() {
+  ESP32Board::loop();
+
+  const unsigned long now = millis();
+  switch (_adc_state) {
+    case BattAdcState::ADC_IDLE:
+      if (_adc_sample_requested ||
+          (_last_batt_read_ms != 0 && static_cast<unsigned long>(now - _last_batt_read_ms) >= BATT_CACHE_TTL_MS)) {
+        _adc_sample_requested = false;
+#ifdef PIN_ADC_CTRL
+        pinMode(PIN_ADC_CTRL, OUTPUT);
+        digitalWrite(PIN_ADC_CTRL, HIGH);
+#endif
+        _adc_state_ms = now;
+        _adc_state = BattAdcState::ADC_SETTLING;
+      }
+      break;
+
+    case BattAdcState::ADC_SETTLING:
+#ifdef PIN_ADC_CTRL
+      if (static_cast<unsigned long>(now - _adc_state_ms) < BATT_SETTLE_MS) {
+        break;
+      }
+#endif
+      analogReadResolution(12);
+      // ESP32-S3 ordering trap: attach pin with a throwaway read before configuring pin attenuation
+      (void)analogReadMilliVolts(BATTERY_PIN);
+      analogSetPinAttenuation(BATTERY_PIN, ADC_11db);
+      _adc_accum_mv = 0;
+      _adc_sample_count = 0;
+      _adc_sample_us = micros();
+      _adc_state = BattAdcState::ADC_SAMPLING;
+      break;
+
+    case BattAdcState::ADC_SAMPLING:
+      if (_adc_sample_count == 0 || static_cast<unsigned long>(micros() - _adc_sample_us) >= ADC_SAMPLE_GAP_US) {
+        _adc_accum_mv += analogReadMilliVolts(BATTERY_PIN);
+        _adc_sample_us = micros();
+        _adc_sample_count++;
+        if (_adc_sample_count >= ADC_NUM_SAMPLES) {
+#ifdef PIN_ADC_CTRL
+          digitalWrite(PIN_ADC_CTRL, LOW);
+#endif
+          uint32_t pin_mv = _adc_accum_mv / ADC_NUM_SAMPLES;
+          _cached_batt_mv = static_cast<uint16_t>(static_cast<float>(pin_mv) * _adc_multiplier);
+          _last_batt_read_ms = (now == 0) ? 1UL : now;
+          _adc_state = BattAdcState::ADC_IDLE;
+        }
+      }
+      break;
+  }
 }
 
 uint16_t NMEPD420Board::sampleBattAdc() {
@@ -128,30 +234,34 @@ uint16_t NMEPD420Board::sampleBattAdc() {
   (void)analogReadMilliVolts(BATTERY_PIN);
   analogSetPinAttenuation(BATTERY_PIN, ADC_11db);
 
-  // Average 8 samples with 150 us gap to filter out RF ripple and power supply noise without blocking
-  // FreeRTOS
+  // Average 8 samples with 150 us gap to filter out RF ripple and power supply noise
   uint32_t sum = 0;
-  for (uint8_t i = 0; i < 8; i++) {
+  for (uint8_t i = 0; i < ADC_NUM_SAMPLES; i++) {
     sum += analogReadMilliVolts(BATTERY_PIN);
-    delayMicroseconds(150);
+    delayMicroseconds(ADC_SAMPLE_GAP_US);
   }
 
-  uint32_t pin_mv = sum / 8U;
-  return static_cast<uint16_t>(pin_mv * ADC_MULTIPLIER);
+  uint32_t pin_mv = sum / ADC_NUM_SAMPLES;
+  return static_cast<uint16_t>(static_cast<float>(pin_mv) * _adc_multiplier);
 }
 
 uint16_t NMEPD420Board::getBattMilliVolts() {
-  unsigned long now = millis();
-  if (_last_batt_read_ms != 0 && (now - _last_batt_read_ms < BATT_CACHE_TTL_MS)) {
+  const unsigned long now = millis();
+  if (_last_batt_read_ms == 0) {
+    _cached_batt_mv = readRawBattMilliVolts();
+    _last_batt_read_ms = (now == 0) ? 1UL : now;
     return _cached_batt_mv;
   }
-
-  _cached_batt_mv = readRawBattMilliVolts();
-  _last_batt_read_ms = (now == 0) ? 1 : now;
+  if (static_cast<unsigned long>(now - _last_batt_read_ms) >= BATT_CACHE_TTL_MS) {
+    _adc_sample_requested = true;
+  }
   return _cached_batt_mv;
 }
 
 uint16_t NMEPD420Board::readRawBattMilliVolts() {
+  // Abort any in-flight async sample cleanly before taking an explicit synchronous measurement
+  _adc_state = BattAdcState::ADC_IDLE;
+  _adc_sample_requested = false;
 #ifdef PIN_ADC_CTRL
   pinMode(PIN_ADC_CTRL, OUTPUT);
   digitalWrite(PIN_ADC_CTRL, HIGH);
@@ -201,12 +311,68 @@ const char *NMEPD420Board::getManufacturerName() const {
   return "RockBase IoT NM-EPD-420-BW";
 }
 
+bool NMEPD420Board::isUsbHostActive() {
+  const unsigned long now = millis();
+  const uint16_t sof_idx = static_cast<uint16_t>(USB_SERIAL_JTAG.fram_num.sof_frame_index);
+  // SOF frame index increments every 1ms only when an active USB host is polling;
+  // usb_serial_jtag_is_connected() starts true for the first 3 ticks after reset even on battery.
+  if (sof_idx != _last_usb_sof_idx || Serial.available() > 0 || (now > 50UL && usb_serial_jtag_is_connected())) {
+    _last_usb_sof_idx = sof_idx;
+    _last_usb_sof_ms = now;
+    _usb_sof_seen = true;
+    return true;
+  }
+  return _usb_sof_seen && ((now - _last_usb_sof_ms) < USB_HOST_HOLD_MS);
+}
+
 void NMEPD420Board::powerOff() {
   enterDeepSleep(0);
 }
 
 void NMEPD420Board::sleep(uint32_t secs) {
-  enterDeepSleep(secs);
+#ifdef DISPLAY_CLASS
+  if (display.isBusy()) {
+    delay(10);
+    return;
+  }
+#endif
+  if (isUsbHostActive()) {
+    delay(1);
+    return;
+  }
+  Serial.flush();
+
+  // Prebuilt Arduino qio_opi libs compile CONFIG_PM_POWER_DOWN_CPU_IN_LIGHT_SLEEP=y without
+  // CONFIG_PM_SLP_SPIRAM_HALFSLEEP_ENABLED, so esp_sleep_start() unconditionally enables CPU +
+  // tagmem retention in Light Sleep (locking up OPI PSRAM cache on wake regardless of ESP_PD_DOMAIN_CPU).
+  // Sleep in interruptible WFI slices instead: keeps SX1262 RX active, feeds TWDT, and wakes <=20ms
+  // on DIO1 RX, BOOT press, or USB host attach.
+  const uint32_t sleep_ms = (secs == 0) ? 30000UL : ((secs > 3600UL) ? 3600000UL : (secs * 1000UL));
+  const unsigned long start_ms = millis();
+  while (static_cast<uint32_t>(millis() - start_ms) < sleep_ms) {
+    if (esp_task_wdt_status(NULL) == ESP_OK) {
+      esp_task_wdt_reset();
+    }
+#ifdef P_LORA_DIO_1
+    if (digitalRead(P_LORA_DIO_1) == HIGH) {
+      break;
+    }
+#endif
+#ifdef PIN_BOOT_BTN
+    if (digitalRead(PIN_BOOT_BTN) == LOW) {
+      break;
+    }
+#endif
+#ifdef DISPLAY_CLASS
+    if (display.isBusy()) {
+      break;
+    }
+#endif
+    if (isUsbHostActive()) {
+      break;
+    }
+    delay(20);
+  }
 }
 
 void NMEPD420Board::enterDeepSleep(uint32_t secs) {
@@ -236,16 +402,23 @@ void NMEPD420Board::enterDeepSleep(uint32_t secs) {
   display.turnOff();
 #endif
 
-  // 3. Power off LoRa modem, latch NSS and shared HSPI SD_CS HIGH via RTC hold, power gate off
+  // 3. Power off LoRa modem, isolate SX1262 signal pins to avoid ESD back-powering when VDD is cut,
+  //    keep shared HSPI microSD CS HIGH via RTC hold, then cut SX126X_POWER_EN
   radio_driver.powerOff();
-  digitalWrite(P_LORA_NSS, HIGH);
-  rtc_gpio_hold_en((gpio_num_t)P_LORA_NSS);
   digitalWrite(PIN_SDCARD_CS, HIGH);
   rtc_gpio_hold_en((gpio_num_t)PIN_SDCARD_CS);
 
 #ifdef SX126X_POWER_EN
+  pinMode(P_LORA_SCLK, INPUT);
+  pinMode(P_LORA_MOSI, INPUT);
+  pinMode(P_LORA_RESET, INPUT);
+  digitalWrite(P_LORA_NSS, LOW);
+  rtc_gpio_hold_en((gpio_num_t)P_LORA_NSS);
   digitalWrite(SX126X_POWER_EN, LOW);
   gpio_hold_en((gpio_num_t)SX126X_POWER_EN);
+#else
+  digitalWrite(P_LORA_NSS, HIGH);
+  rtc_gpio_hold_en((gpio_num_t)P_LORA_NSS);
 #endif
 
   // Latch digital GPIO pad hold states during deep sleep
@@ -282,8 +455,8 @@ void NMEPD420Board::enterDeepSleep(uint32_t secs) {
   esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_BOOT_BTN, 0); // Active LOW
 #endif
 
-// 9. Configure LoRa Packet Wakeup on DIO1 (GPIO 14):
-// 9. Configure LoRa Packet Wakeup on DIO1 (GPIO 14) only if LoRa modem is not powered down
+  // 9. LoRa Packet Wakeup on DIO1 is unavailable in Deep Sleep when SX126X_POWER_EN cuts SX1262 VCC
+  //    (for RX packet wakeup, NMEPD420Board::sleep() uses Light Sleep via ESP32Board::sleep)
 #if defined(P_LORA_DIO_1) && !defined(SX126X_POWER_EN)
   rtc_gpio_init((gpio_num_t)P_LORA_DIO_1);
   rtc_gpio_set_direction((gpio_num_t)P_LORA_DIO_1, RTC_GPIO_MODE_INPUT_ONLY);
@@ -296,6 +469,6 @@ void NMEPD420Board::enterDeepSleep(uint32_t secs) {
     esp_sleep_enable_timer_wakeup((uint64_t)secs * 1000000ULL);
   }
 
-  // 11. Enter deep sleep (CPU halts here and never returns)
+  // 11. Halt CPU until wake/reset
   esp_deep_sleep_start();
 }
