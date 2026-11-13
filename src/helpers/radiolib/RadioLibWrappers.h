@@ -15,7 +15,7 @@ class RadioLibWrapper : public mesh::Radio {
 protected:
   PhysicalLayer* _radio;
   mesh::MainBoard* _board;
-  uint32_t n_recv, n_sent, n_recv_errors;
+  uint32_t n_recv, n_sent, n_recv_errors, n_crc_errors, n_spi_errors;
   int16_t _noise_floor, _threshold;
   bool _cad_enabled;
   uint16_t _num_floor_samples;
@@ -29,7 +29,10 @@ protected:
   virtual void doResetAGC();
 
 public:
-  RadioLibWrapper(PhysicalLayer& radio, mesh::MainBoard& board) : _radio(&radio), _board(&board), _preamble_sf(0) { n_recv = n_sent = 0; }
+  RadioLibWrapper(PhysicalLayer& radio, mesh::MainBoard& board)
+      : _radio(&radio), _board(&board), _preamble_sf(0) {
+    n_recv = n_sent = n_recv_errors = n_crc_errors = n_spi_errors = 0;
+  }
 
   void begin() override;
   virtual void powerOff() { _radio->sleep(); }
@@ -67,8 +70,10 @@ public:
 
   uint32_t getPacketsRecv() const { return n_recv; }
   uint32_t getPacketsRecvErrors() const { return n_recv_errors; }
+  uint32_t getPacketsCrcErrors() const { return n_crc_errors; }
+  uint32_t getRadioSpiErrors() const { return n_spi_errors; }
   uint32_t getPacketsSent() const { return n_sent; }
-  void resetStats() { n_recv = n_sent = n_recv_errors = 0; }
+  void resetStats() { n_recv = n_sent = n_recv_errors = n_crc_errors = n_spi_errors = 0; }
 
   virtual float getLastRSSI() const override;
   virtual float getLastSNR() const override;

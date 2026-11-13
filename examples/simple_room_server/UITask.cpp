@@ -1,12 +1,20 @@
 #include "UITask.h"
 #include <Arduino.h>
 #include <helpers/CommonCLI.h>
+#if defined(NM_EPD_420_BW)
+#include "target.h"
+#include "MyMesh.h"
+#include <NMEPD420RfHealthUI.h>
+extern MyMesh the_mesh;
+#endif
 
 #ifndef USER_BTN_PRESSED
 #define USER_BTN_PRESSED LOW
 #endif
 
+#ifndef AUTO_OFF_MILLIS
 #define AUTO_OFF_MILLIS      20000  // 20 seconds
+#endif
 #define BOOT_SCREEN_MILLIS   4000   // 4 seconds
 
 // 'meshcore', 128x13px
@@ -31,6 +39,9 @@ void UITask::begin(NodePrefs* node_prefs, const char* build_date, const char* fi
   _auto_off = millis() + AUTO_OFF_MILLIS;
   _node_prefs = node_prefs;
   _display->turnOn();
+#if defined(PIN_USER_BTN) && defined(DISPLAY_CLASS)
+  pinMode(PIN_USER_BTN, INPUT_PULLUP);
+#endif
 
   // strip off dash and commit hash by changing dash to null terminator
   // e.g: v1.2.3-abcdef -> v1.2.3
@@ -73,6 +84,48 @@ void UITask::renderCurrScreen() {
     _display->setCursor((_display->width() - typeWidth) / 2, 48);
     _display->print(node_type);
   } else {  // home screen
+#if defined(NM_EPD_420_BW)
+    if (_page == 1) {
+      nmRenderRfHealthView(*_display,
+                           _node_prefs->freq,
+                           _node_prefs->sf,
+                           _node_prefs->airtime_factor,
+                           the_mesh.getTotalAirTime(),
+                           the_mesh.getReceiveAirTime(),
+                           the_mesh.getRemainingTxBudget(),
+                           board.getBattMilliVolts(),
+                           4,
+                           "btn: Main Page");
+    } else {
+      char sd_buf[32];
+      _display->setCursor(0, 0);
+      _display->setTextSize(1);
+      _display->setColor(UIColor::primary_txt);
+      _display->print(_node_prefs->node_name);
+
+      // freq / sf
+      _display->setCursor(0, 20);
+      sprintf(tmp, "FREQ: %06.3f SF%d", _node_prefs->freq, _node_prefs->sf);
+      _display->print(tmp);
+
+      // bw / cr
+      _display->setCursor(0, 32);
+      sprintf(tmp, "BW: %03.2f CR: %d", _node_prefs->bw, _node_prefs->cr);
+      _display->print(tmp);
+
+      _display->setCursor(0, 46);
+      sprintf(tmp, "BATT: %umV %s", (unsigned)board.getBattMilliVolts(), board.isUsbPowered() ? "USB" : "BAT");
+      _display->print(tmp);
+
+      sd_logger.formatUiSummary(sd_buf, sizeof(sd_buf));
+      _display->setCursor(0, 60);
+      sprintf(tmp, "SD: %s", sd_buf);
+      _display->print(tmp);
+
+      _display->setColor(UIColor::secondary_txt);
+      _display->drawTextCentered(_display->width() / 2, 118, "btn: RF Health");
+    }
+#else
     // node name
     _display->setCursor(0, 0);
     _display->setTextSize(1);
@@ -88,6 +141,7 @@ void UITask::renderCurrScreen() {
     _display->setCursor(0, 30);
     sprintf(tmp, "BW: %03.2f CR: %d", _node_prefs->bw, _node_prefs->cr);
     _display->print(tmp);
+#endif
   }
 }
 
@@ -98,7 +152,12 @@ void UITask::loop() {
     if (btnState != _prevBtnState) {
       if (btnState == USER_BTN_PRESSED) {  // pressed?
         if (_display->isOn()) {
+#if defined(NM_EPD_420_BW)
+          _page = (_page + 1) & 1;
+          _next_refresh = 0;
+#else
           // TODO: any action ?
+#endif
         } else {
           _display->turnOn();
         }
@@ -111,15 +170,21 @@ void UITask::loop() {
 #endif
 
   if (_display->isOn()) {
-    if (millis() >= _next_refresh) {
+    if (millis() >= _next_refresh && !_display->isBusy()) {
       _display->startFrame();
       renderCurrScreen();
       _display->endFrame();
 
+#if defined(NM_EPD_420_BW)
+      _next_refresh = millis() + 5000;   // calm partial refresh cadence for SSD1683
+#else
       _next_refresh = millis() + 1000;   // refresh every second
+#endif
     }
+#if AUTO_OFF_MILLIS > 0
     if (millis() > _auto_off) {
       _display->turnOff();
     }
+#endif
   }
 }

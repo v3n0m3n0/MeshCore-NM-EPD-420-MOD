@@ -199,6 +199,13 @@ public:
 
   void begin();
   void loop();
+  void setInitialRadioConfig(uint32_t freq_hz, uint32_t bw_hz, uint8_t sf, uint8_t cr, uint8_t tx_power) {
+    _config.freq_hz = freq_hz;
+    _config.bw_hz = bw_hz;
+    _config.sf = sf;
+    _config.cr = cr;
+    _config.tx_power = tx_power;
+  }
 
   void setRadioCallback(SetRadioCallback cb) { _setRadioCallback = cb; }
   void setTxPowerCallback(SetTxPowerCallback cb) { _setTxPowerCallback = cb; }

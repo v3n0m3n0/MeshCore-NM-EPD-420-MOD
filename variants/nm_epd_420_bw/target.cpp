@@ -9,6 +9,9 @@ WRAPPER_CLASS radio_driver(radio, board);
 ESP32RTCClock fallback_clock;
 AutoDiscoverRTCClock rtc_clock(fallback_clock);
 NMEPD420EnvironmentSensorManager sensors;
+NMEPD420SDLogger sd_logger;
+
+SPIClass& getSharedHspi() { return spi; }
 
 #ifdef DISPLAY_CLASS
 DISPLAY_CLASS display;
@@ -28,8 +31,16 @@ bool radio_init() {
   Wire.begin();
 #endif
   rtc_clock.begin(Wire);
-  spi.begin(P_LORA_SCLK, P_LORA_MISO, P_LORA_MOSI, P_LORA_NSS);
-  return radio.std_init(&spi);
+#ifdef SX126X_POWER_EN
+  pinMode(SX126X_POWER_EN, OUTPUT);
+  digitalWrite(SX126X_POWER_EN, HIGH);
+  delay(10);
+#endif
+  if (!radio.std_init(&spi)) return false;
+#ifdef PIN_SDCARD_CS
+  sd_logger.begin(&spi, PIN_SDCARD_CS, P_LORA_NSS);
+#endif
+  return true;
 }
 
 mesh::LocalIdentity radio_new_identity() {

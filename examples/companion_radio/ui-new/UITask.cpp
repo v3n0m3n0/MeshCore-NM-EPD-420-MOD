@@ -2,6 +2,9 @@
 #include <helpers/TxtDataHelpers.h>
 #include "../MyMesh.h"
 #include "target.h"
+#if defined(NM_EPD_420_BW)
+  #include <NMEPD420RfHealthUI.h>
+#endif
 #if defined(ENABLE_WIFI_INTERFACE) || defined(WIFI_SSID)
   #include <WiFi.h>
 #endif
@@ -105,6 +108,9 @@ class HomeScreen : public UIScreen {
     FIRST,
     RECENT,
     RADIO,
+#if defined(NM_EPD_420_BW)
+    RF_HEALTH,
+#endif
     BLUETOOTH,
     ADVERT,
 #if ENV_INCLUDE_GPS == 1
@@ -209,8 +215,10 @@ public:
     if (!_sensors_read_initial || force || !has_env_data || (millis() > next_sensors_refresh)) {
       _sensors_read_initial = true;
       next_sensors_refresh = millis() + 60000;
-      if (force || !sensors.hasCache() || (millis() - sensors.getLastReadMs() > 50000)) {
+      if (force || !sensors.hasCache()) {
         sensors.sampleSensors();
+      } else if (millis() - sensors.getLastReadMs() > 50000) {
+        sensors.triggerAsyncRefresh();
       }
       sensors_lpp.reset();
       sensors_nb = 0;
@@ -528,6 +536,19 @@ public:
         display.print("No sensors detected");
       }
 #endif
+#if defined(NM_EPD_420_BW)
+    } else if (_page == HomePage::RF_HEALTH) {
+      nmRenderRfHealthView(display,
+                           _node_prefs->freq,
+                           _node_prefs->sf,
+                           _node_prefs->airtime_factor,
+                           the_mesh.getTotalAirTime(),
+                           the_mesh.getReceiveAirTime(),
+                           the_mesh.getRemainingTxBudget(),
+                           _task->getBattMilliVolts(),
+                           20,
+                           "SD retry: " PRESS_LABEL);
+#endif
     } else if (_page == HomePage::BLUETOOTH) {
       const int dy = NM_DY(18, 67);
       display.setColor(UIColor::corp_blue);
@@ -792,6 +813,14 @@ public:
       _task->showAlert("Sensors refreshed", 800);
       return true;
     }
+#if defined(NM_EPD_420_BW)
+    if (c == KEY_ENTER && _page == HomePage::RF_HEALTH) {
+      sd_logger.retryMount();
+      display.forceFullRefresh();
+      _task->showAlert(sd_logger.isMounted() ? "SD mounted!" : "SD absent", 1000);
+      return true;
+    }
+#endif
 #if ENV_INCLUDE_GPS == 1
     if (c == KEY_ENTER && _page == HomePage::GPS) {
       _task->toggleGPS();

@@ -13,14 +13,22 @@ public:
   CustomSX1262Wrapper(CustomSX1262& radio, mesh::MainBoard& board) : RadioLibWrapper(radio, board) { }
 
   void setParams(float freq, float bw, uint8_t sf, uint8_t cr) override {
-    ((CustomSX1262 *)_radio)->setFrequency(freq);
-    ((CustomSX1262 *)_radio)->setSpreadingFactor(sf);
-    ((CustomSX1262 *)_radio)->setBandwidth(bw);
-    ((CustomSX1262 *)_radio)->setCodingRate(cr);
+    const bool was_rx = isInRecvMode();
+    idle();
+    auto* sx = static_cast<CustomSX1262*>(_radio);
+    sx->standby();
+    sx->setFrequency(freq);
+    sx->setSpreadingFactor(sf);
+    sx->setBandwidth(bw);
+    sx->setCodingRate(cr);
+    sx->setRxBoostedGainMode(sx->getRxBoostedGainMode());
     updatePreamble(sf);
     PacketMillis pm = calcMaxPacketMillis(sf, bw, cr, preambleLengthForSF(sf));
-    ((CustomSX1262 *)_radio)->setPreambleMillis(pm.preambleMillis);
-    ((CustomSX1262 *)_radio)->setMaxPayloadMillis(pm.payloadMillis);
+    sx->setPreambleMillis(pm.preambleMillis);
+    sx->setMaxPayloadMillis(pm.payloadMillis);
+    if (was_rx) {
+      startRecv();
+    }
   }
 
   bool isReceivingPacket() override { 

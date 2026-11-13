@@ -329,6 +329,9 @@ void loop() {
   the_mesh.loop();
   interface_manager.loop();
   sensors.loop();
+#ifdef NM_EPD_420_BW
+  sd_logger.loop(!radio_driver.isInRecvMode());
+#endif
 #ifdef DISPLAY_CLASS
   ui_task.loop();
 #endif

@@ -300,6 +300,9 @@ uint8_t MyMesh::getExtraAckTransmitCount() const {
 }
 
 void MyMesh::logRxRaw(float snr, float rssi, const uint8_t raw[], int len) {
+#ifdef NM_EPD_420_BW
+  sd_logger.pushFrame(NMEPD420SDLogger::RfDir::RX_RAW, raw, len, rssi, snr, getRTCClock()->getCurrentTime());
+#endif
   if (_serial->isConnected() && len + 3 <= MAX_FRAME_SIZE) {
     int i = 0;
     out_frame[i++] = PUSH_CODE_LOG_RX_DATA;

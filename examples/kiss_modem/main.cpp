@@ -124,6 +124,25 @@ void setup() {
   modem->setTxPowerCallback(onSetTxPower);
   modem->setGetCurrentRssiCallback(onGetCurrentRssi);
   modem->setGetStatsCallback(onGetStats);
+#if defined(LORA_FREQ) && defined(LORA_BW) && defined(LORA_SF)
+#ifdef LORA_CR
+  constexpr uint8_t init_cr = LORA_CR;
+#else
+  constexpr uint8_t init_cr = 5;
+#endif
+#ifdef LORA_TX_POWER
+  constexpr uint8_t init_tx_power = LORA_TX_POWER;
+#else
+  constexpr uint8_t init_tx_power = 22;
+#endif
+  modem->setInitialRadioConfig(
+    static_cast<uint32_t>(LORA_FREQ * 1000000.0 + 0.5),
+    static_cast<uint32_t>(LORA_BW * 1000.0 + 0.5),
+    static_cast<uint8_t>(LORA_SF),
+    init_cr,
+    init_tx_power
+  );
+#endif
   modem->begin();
 
   board.onBootComplete();
@@ -145,10 +164,18 @@ void loop() {
     if (rx_len > 0) {
       int8_t snr = (int8_t)(radio_driver.getLastSNR() * 4);
       int8_t rssi = (int8_t)radio_driver.getLastRSSI();
+#ifdef NM_EPD_420_BW
+      sd_logger.pushFrame(NMEPD420SDLogger::RfDir::RX_RAW, rx_buf, rx_len,
+                          radio_driver.getLastRSSI(), radio_driver.getLastSNR(), rtc_clock.getCurrentTime());
+#endif
       modem->onPacketReceived(snr, rssi, rx_buf, rx_len);
     }
   }
 
+  sensors.loop();
+#ifdef NM_EPD_420_BW
+  sd_logger.loop(!radio_driver.isInRecvMode());
+#endif
   board.loop();
 
   if ((uint32_t)(millis() - next_noise_floor_calib_ms) >= NOISE_FLOOR_CALIB_INTERVAL_MS) {

@@ -9,6 +9,9 @@ class UITask {
   int _prevBtnState;
   NodePrefs* _node_prefs;
   char _version_info[32];
+#if defined(NM_EPD_420_BW)
+  uint8_t _page = 0;
+#endif
 
   void renderCurrScreen();
 public:

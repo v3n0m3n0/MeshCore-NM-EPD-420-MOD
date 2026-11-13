@@ -159,7 +159,31 @@ void loop() {
     the_mesh.handleCommand(0, command, reply);  // NOTE: there is no sender_timestamp via serial!
 #endif
     if (reply[0]) {
-      Serial.print("  -> "); Serial.println(reply);
+#if defined(ESP32) && defined(ARDUINO_USB_MODE) && ARDUINO_USB_MODE && defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
+      // Flash writes (e.g. savePrefs) can stall Core 0 SOF tick hook >5 ms and trip HWCDC connected=false;
+      // wait briefly for USB CDC re-latch before Serial.write so reply isn't stranded in tx_ring_buf.
+      if (!Serial) {
+        const unsigned long cdc_wait_t0 = millis();
+        while (!Serial && (unsigned long)(millis() - cdc_wait_t0) < 15UL) {
+          delay(1);
+        }
+      }
+#endif
+      char line_buf[176];
+      int n = snprintf(line_buf, sizeof(line_buf), "  -> %s\r\n", reply);
+      if (n > 0 && n < (int)sizeof(line_buf)) {
+        // Avoid exact 64B USB CDC bulk packet multiples (standalone or coalesced with echoed command) that stall Windows usbser.sys without ZLP
+        const int cmd_len = (int)strlen(command);
+        while (((n % 64) == 0 || ((cmd_len + 1 + n) % 64) == 0 || ((cmd_len + 2 + n) % 64) == 0) &&
+               n + 2 < (int)sizeof(line_buf)) {
+          line_buf[n++] = '\r';
+          line_buf[n++] = '\n';
+          line_buf[n] = '\0';
+        }
+        Serial.write((const uint8_t *)line_buf, (size_t)n);
+      } else {
+        Serial.print("  -> "); Serial.println(reply);
+      }
     }
 
     command[0] = 0;  // reset command buffer
@@ -197,6 +221,9 @@ void loop() {
 
   the_mesh.loop();
   sensors.loop();
+#ifdef NM_EPD_420_BW
+  sd_logger.loop(!radio_driver.isInRecvMode());
+#endif
 #ifdef DISPLAY_CLASS
   ui_task.loop();
 #endif

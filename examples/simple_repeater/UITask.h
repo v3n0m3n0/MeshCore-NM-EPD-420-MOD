@@ -12,6 +12,9 @@ class UITask {
   char _version_info[32];
   unsigned long _powering_off_at = 0;
   unsigned long _started_at = 0;
+#if defined(NM_EPD_420_BW)
+  uint8_t _page = 0;
+#endif
 
   void renderCurrScreen();
 public:

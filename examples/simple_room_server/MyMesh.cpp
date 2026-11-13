@@ -217,6 +217,9 @@ int MyMesh::handleRequest(ClientInfo *sender, uint32_t sender_timestamp, uint8_t
 }
 
 void MyMesh::logRxRaw(float snr, float rssi, const uint8_t raw[], int len) {
+#ifdef NM_EPD_420_BW
+  sd_logger.pushFrame(NMEPD420SDLogger::RfDir::RX_RAW, raw, len, rssi, snr, getRTCClock()->getCurrentTime());
+#endif
 #if MESH_PACKET_LOGGING
   Serial.print(getLogDateTime());
   Serial.print(" RAW: ");
@@ -245,6 +248,13 @@ void MyMesh::logRx(mesh::Packet *pkt, int len, float score) {
   }
 }
 void MyMesh::logTx(mesh::Packet *pkt, int len) {
+#ifdef NM_EPD_420_BW
+  {
+    uint8_t raw_buf[256];
+    uint8_t raw_len = pkt->writeTo(raw_buf);
+    sd_logger.pushFrame(NMEPD420SDLogger::RfDir::TX_PKT, raw_buf, raw_len, 0.0f, 0.0f, getRTCClock()->getCurrentTime());
+  }
+#endif
   if (_logging) {
     File f = openAppend(PACKET_LOG_FILE);
     if (f) {
@@ -263,6 +273,13 @@ void MyMesh::logTx(mesh::Packet *pkt, int len) {
   }
 }
 void MyMesh::logTxFail(mesh::Packet *pkt, int len) {
+#ifdef NM_EPD_420_BW
+  {
+    uint8_t raw_buf[256];
+    uint8_t raw_len = pkt->writeTo(raw_buf);
+    sd_logger.pushFrame(NMEPD420SDLogger::RfDir::TX_FAIL, raw_buf, raw_len, 0.0f, 0.0f, getRTCClock()->getCurrentTime());
+  }
+#endif
   if (_logging) {
     File f = openAppend(PACKET_LOG_FILE);
     if (f) {
@@ -985,6 +1002,10 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
     }
   } else if (memcmp(command, "set repeat on", 13) == 0) {
     strcpy(reply, "ERR - repeat now deprecated");
+#ifdef NM_EPD_420_BW
+  } else if (sd_logger.handleCliCommand(command, reply)) {
+    return;
+#endif
   } else{
     _cli.handleCommand(sender_timestamp, command, reply);  // common CLI commands
   }

@@ -3,6 +3,7 @@
 #define RADIOLIB_STATIC_ONLY 1
 #include <NMEPD420Board.h>
 #include <NMEPD420EnvironmentSensorManager.h>
+#include <NMEPD420SDLogger.h>
 #include <RadioLib.h>
 #include <helpers/AutoDiscoverRTCClock.h>
 #include <helpers/radiolib/CustomSX1262Wrapper.h>
@@ -17,6 +18,9 @@ extern NMEPD420Board board;
 extern WRAPPER_CLASS radio_driver;
 extern AutoDiscoverRTCClock rtc_clock;
 extern NMEPD420EnvironmentSensorManager sensors;
+extern NMEPD420SDLogger sd_logger;
+
+SPIClass& getSharedHspi();
 
 #ifdef DISPLAY_CLASS
 extern DISPLAY_CLASS display;
